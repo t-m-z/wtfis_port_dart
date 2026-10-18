@@ -4,7 +4,7 @@ part of 'lookup.dart';
 /// (port of `handlers/domain.py`).
 ///
 /// Run it via `lookup()` in `lookup.dart`, which wraps the result in a
-/// [_LookupResult].
+/// [LookupResult].
 class _DomainHandler extends _BaseHandler {
   final int maxResolutions;
 
@@ -13,7 +13,7 @@ class _DomainHandler extends _BaseHandler {
   _Resolutions? resolutions;
 
   _DomainHandler(String entity, _WtfisConfig config, http.Client client,
-      List<_LookupError> errors)
+      List<LookupError> errors)
       : maxResolutions = config.maxResolutions,
         super(entity, config, client, errors, isIp: false);
 

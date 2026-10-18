@@ -8,7 +8,7 @@ abstract class _BaseClient {
   final http.Client http_;
 
   /// Shared error list of the running lookup.
-  final List<_LookupError> errors;
+  final List<LookupError> errors;
 
   _BaseClient(this.http_, this.errors);
 
@@ -57,7 +57,7 @@ abstract class _BaseClient {
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       if (tolerate != null && tolerate(resp)) return <String, dynamic>{};
-      errors.add(_LookupError.http(name, resp, uri));
+      errors.add(LookupError.http(name, resp, uri));
       return null;
     }
 
@@ -74,12 +74,12 @@ abstract class _BaseClient {
   }
 
   Null _networkError(Uri uri, String message) {
-    errors.add(_LookupError(_LookupErrorKind.network, name, message, url: uri));
+    errors.add(LookupError(LookupErrorKind.network, name, message, url: uri));
     return null;
   }
 
   Null _modelError(String message, [Uri? uri]) {
-    errors.add(_LookupError(_LookupErrorKind.model, name,
+    errors.add(LookupError(LookupErrorKind.model, name,
         'Data model validation error: $message',
         url: uri));
     return null;

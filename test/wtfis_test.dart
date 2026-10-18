@@ -5,44 +5,41 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
-import '../bin/src/lookup.dart';
+import '../wtfis/lookup.dart';
 
 dynamic testData(String name) =>
     jsonDecode(File('test/test_data/$name').readAsStringSync());
 
-/// Runs [lookup] with the given environment only (never the real process
-/// environment or ~/.env.wtfis).
-Future run(
-  String domain, {
-  Map<String, String> env = const {},
+/// Runs [lookup] with API keys given by their wtfis environment variable
+/// names (`VT_API_KEY`, ...).
+Future<LookupResult> run(
+  String address, {
+  Map<String, String> keys = const {},
   http.Client? client,
-  bool all = false,
-  bool useShodan = false,
   int maxResolutions = 3,
-  String? geolocationService,
+  String geolocationService = 'ipwhois',
 }) =>
-    lookup(domain,
-        environment: env,
-        envFile: 'test/test_data/does-not-exist',
-        httpClient: client ?? gistApis(),
-        all: all,
-        useShodan: useShodan,
+    lookup(address,
+        vtApiKey: keys['VT_API_KEY'],
+        ip2WhoisApiKey: keys['IP2WHOIS_API_KEY'],
+        ip2LocationApiKey: keys['IP2LOCATION_API_KEY'],
+        shodanApiKey: keys['SHODAN_API_KEY'],
+        greynoiseApiKey: keys['GREYNOISE_API_KEY'],
+        abuseIpDbApiKey: keys['ABUSEIPDB_API_KEY'],
+        urlHausApiKey: keys['URLHAUS_API_KEY'],
+        geolocationService: geolocationService,
         maxResolutions: maxResolutions,
-        geolocationService: geolocationService);
+        httpClient: client ?? gistApis());
 
 /// Same as [run], returning the decoded JSON output.
 Future<Map<String, dynamic>> runJson(
-  String domain, {
-  Map<String, String> env = const {},
+  String address, {
+  Map<String, String> keys = const {},
   http.Client? client,
-  bool all = false,
   int maxResolutions = 3,
 }) async =>
-    jsonDecode((await run(domain,
-            env: env,
-            client: client,
-            all: all,
-            maxResolutions: maxResolutions))
+    jsonDecode((await run(address,
+            keys: keys, client: client, maxResolutions: maxResolutions))
         .toJsonString()) as Map<String, dynamic>;
 
 const vt = {'VT_API_KEY': 'foo'};
@@ -148,7 +145,7 @@ const allKeys = {
 void main() {
   group('lookup', () {
     test('returns enriched data (VT + IPWhois + VT whois)', () async {
-      final out = await runJson('gist[.]github[.]com', env: vt);
+      final out = await runJson('gist[.]github[.]com', keys: vt);
 
       expect(out['entity'], 'gist.github.com');
       expect(out['type'], 'domain');
@@ -199,12 +196,12 @@ void main() {
     });
 
     test('result object offers data and errors', () async {
-      final result = await run('gist.github.com', env: vt);
+      final result = await run('gist.github.com', keys: vt);
       expect(result.entity, 'gist.github.com');
       expect(result.type, 'domain');
       expect(result.ok, isTrue);
       expect(result.aborted, isFalse);
-      expect(result.data['virustotal'], isNotNull);
+      expect(result.data!['virustotal'], isNotNull);
       expect(result.toJsonString(pretty: true),
           startsWith('{\n  "entity": "gist.github.com"'));
     });
@@ -212,13 +209,12 @@ void main() {
     test('uses IP2Whois when its key is set, plus Shodan and URLhaus',
         () async {
       final out = await runJson('gist.github.com',
-          env: {
+          keys: {
             ...vt,
             'IP2WHOIS_API_KEY': 'alice',
             'SHODAN_API_KEY': 'hunter2',
             'URLHAUS_API_KEY': 'eve',
-          },
-          all: true);
+          });
 
       expect(out['whois']['source'], 'ip2whois');
       expect(out['whois']['registrar'], 'MarkMonitor, Inc.');
@@ -240,9 +236,9 @@ void main() {
 
     test('IPinfo as geolocation service', () async {
       final result = await run('gist.github.com',
-          env: vt, geolocationService: 'ipinfo');
+          keys: vt, geolocationService: 'ipinfo');
       expect(result.ok, isTrue);
-      final geo = result.data['resolutions']['data'][0]['geoasn'];
+      final geo = result.data!['resolutions']['data'][0]['geoasn'];
       expect(geo['source'], 'IPinfo');
       expect(geo['asn'], '16509');
       expect(geo['city'], 'Mumbai');
@@ -250,27 +246,33 @@ void main() {
 
     test('IP2Location as geolocation service', () async {
       final result = await run('gist.github.com',
-          env: {...vt, 'IP2LOCATION_API_KEY': 'bob'},
+          keys: {...vt, 'IP2LOCATION_API_KEY': 'bob'},
           geolocationService: 'ip2location');
       expect(result.ok, isTrue);
-      final geo = result.data['resolutions']['data'][0]['geoasn'];
+      final geo = result.data!['resolutions']['data'][0]['geoasn'];
       expect(geo['source'], 'IP2Location');
       expect(geo['city'], 'Mumbai');
     });
 
-    test('reads API keys, GEOLOCATION_SERVICE and WTFIS_DEFAULTS', () async {
+    test('every source with an API key is queried, others are skipped',
+        () async {
       final requests = <Uri>[];
       await run('gist.github.com',
-          env: {
-            ...vt,
-            'SHODAN_API_KEY': 'hunter2',
-            'GEOLOCATION_SERVICE': 'ipinfo',
-            'WTFIS_DEFAULTS': '-s',
-          },
+          keys: {...vt, 'SHODAN_API_KEY': 'hunter2'},
+          geolocationService: 'ipinfo',
           client: gistApis(requests: requests));
       final hosts = requests.map((u) => u.host).toSet();
-      expect(hosts, containsAll(['ipinfo.io', 'api.shodan.io']));
-      expect(hosts, isNot(contains('ipwho.is')));
+      expect(hosts, {'www.virustotal.com', 'ipinfo.io', 'api.shodan.io'});
+    });
+
+    test('blank API keys count as not set', () async {
+      final requests = <Uri>[];
+      final result = await lookup('gist.github.com',
+          vtApiKey: '  ',
+          shodanApiKey: '',
+          httpClient: gistApis(requests: requests));
+      expect(requests, isEmpty);
+      expect(result.ok, isTrue);
     });
 
     test('without any API key nothing is requested', () async {
@@ -287,7 +289,7 @@ void main() {
     test('maxResolutions = 0 skips resolutions and IP enrichment', () async {
       final requests = <Uri>[];
       final out = await runJson('gist.github.com',
-          env: vt, maxResolutions: 0, client: gistApis(requests: requests));
+          keys: vt, maxResolutions: 0, client: gistApis(requests: requests));
       expect(out['resolutions'], isNull);
       expect(requests.where((u) => u.host == 'ipwho.is'), isEmpty);
       expect(out['virustotal'], isNotNull);
@@ -298,7 +300,7 @@ void main() {
   group('errors', () {
     test('HTTP errors are collected with status, url and body', () async {
       final out = await runJson('gist.github.com',
-          env: vt, client: gistApis(vtStatus: 401));
+          keys: vt, client: gistApis(vtStatus: 401));
       expect(out['ok'], isFalse);
       expect(out['virustotal'], isNull);
       final errors = out['errors'] as List;
@@ -319,18 +321,17 @@ void main() {
       final page = '<html><body><h1>502 Bad Gateway</h1>'
           '${'x' * 2000}</body></html>';
       final result = await run('gist.github.com',
-          env: vt, client: gistApis(vtStatus: 502, vtErrorBody: page));
+          keys: vt, client: gistApis(vtStatus: 502, vtErrorBody: page));
       final e = result.httpErrors.first;
       expect(e.statusCode, 502);
       expect(e.message, startsWith('502 Server Error'));
       expect(e.body, startsWith('<html><body><h1>502 Bad Gateway</h1>'));
-      expect(e.body.length, 1001); // 1000 characters + ellipsis
+      expect(e.body!.length, 1001); // 1000 characters + ellipsis
     });
 
     test('API keys in query parameters are not part of error urls', () async {
       final result = await run('gist.github.com',
-          env: {...vt, 'SHODAN_API_KEY': 'hunter2'},
-          useShodan: true,
+          keys: {...vt, 'SHODAN_API_KEY': 'hunter2'},
           client: gistApis(shodanStatus: 500));
       final shodan = result.errors.where((e) => e.source == 'Shodan');
       expect(shodan, hasLength(3)); // one per resolved IP
@@ -338,21 +339,20 @@ void main() {
           'https://api.shodan.io/shodan/host/13.234.210.38');
       expect(result.toJsonString(), isNot(contains('hunter2')));
       // the other sources are still filled
-      expect(result.data['virustotal'], isNotNull);
-      expect(result.data['whois'], isNotNull);
+      expect(result.data!['virustotal'], isNotNull);
+      expect(result.data!['whois'], isNotNull);
     });
 
     test('tolerated 404 (Shodan: IP unknown) is no error', () async {
       final result = await run('gist.github.com',
-          env: {...vt, 'SHODAN_API_KEY': 'hunter2'},
-          useShodan: true,
+          keys: {...vt, 'SHODAN_API_KEY': 'hunter2'},
           client: gistApis(shodanStatus: 404));
       expect(result.ok, isTrue);
     });
 
     test('network errors are collected', () async {
       final result = await run('gist.github.com',
-          env: vt,
+          keys: vt,
           client: MockClient(
               (req) async => throw http.ClientException('Connection refused')));
       expect(result.ok, isFalse);
@@ -363,7 +363,7 @@ void main() {
 
     test('invalid API data is collected as model error', () async {
       final out = await runJson('gist.github.com',
-          env: vt,
+          keys: vt,
           client: gistApis(vtDomainBody: {'intentionally': 'wrong data'}));
       final errors = out['errors'] as List;
       expect(errors, hasLength(1));
@@ -401,7 +401,7 @@ void main() {
     test('IPv4 with all sources', () async {
       final requests = <Uri>[];
       final result = await run('1.1.1.1',
-          env: allKeys, all: true, client: ipApis(requests: requests));
+          keys: allKeys, client: ipApis(requests: requests));
       expect(result.ok, isTrue, reason: '${result.errors}');
       expect(result.type, 'ip');
       expect(result.entity, '1.1.1.1');
@@ -440,7 +440,7 @@ void main() {
 
     test('defanged IPv4', () async {
       final result =
-          await run('1[.]1[.]1[.]1', env: vt, client: ipApis());
+          await run('1[.]1[.]1[.]1', keys: vt, client: ipApis());
       expect(result.entity, '1.1.1.1');
       expect(result.type, 'ip');
       expect(result.ok, isTrue);
@@ -455,7 +455,7 @@ void main() {
       test('IPv6 $input is normalized and looked up', () async {
         final requests = <Uri>[];
         final result =
-            await run(input, env: vt, client: ipApis(requests: requests));
+            await run(input, keys: vt, client: ipApis(requests: requests));
         expect(result.ok, isTrue, reason: '${result.errors}');
         expect(result.type, 'ip');
         expect(result.entity, '2606:4700:4700::1111');
@@ -464,7 +464,7 @@ void main() {
         expect(requests.map((u) => u.toString()),
             contains('https://ipwho.is/2606:4700:4700::1111'));
         // the single queried IP is used even if the API keys it differently
-        expect(result.data['geoasn'], isNotNull);
+        expect(result.data!['geoasn'], isNotNull);
       });
     }
 
@@ -481,7 +481,7 @@ void main() {
       test('non-public IP $input is an input error', () async {
         final requests = <Uri>[];
         final result =
-            await run(input, env: vt, client: ipApis(requests: requests));
+            await run(input, keys: vt, client: ipApis(requests: requests));
         expect(requests, isEmpty);
         expect(result.aborted, isTrue);
         expect(result.type, 'ip');
@@ -493,14 +493,14 @@ void main() {
 
     test('maxResolutions is not applicable to IPs', () async {
       final result =
-          await run('1.1.1.1', env: vt, maxResolutions: 5, client: ipApis());
+          await run('1.1.1.1', keys: vt, maxResolutions: 5, client: ipApis());
       expect(result.aborted, isTrue);
       expect(result.errors.single.kind.name, 'config');
     });
 
     test('HTTP errors are collected per source', () async {
       final result = await run('1.1.1.1',
-          env: allKeys, all: true, client: ipApis(status: 503));
+          keys: allKeys, client: ipApis(status: 503));
       expect(result.ok, isFalse);
       expect(result.aborted, isFalse);
       expect(

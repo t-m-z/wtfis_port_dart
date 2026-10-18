@@ -9,7 +9,7 @@ class _IpAddressHandler extends _BaseHandler {
   _VtIpAddress? vtInfo;
 
   _IpAddressHandler(String entity, _WtfisConfig config, http.Client client,
-      List<_LookupError> errors)
+      List<LookupError> errors)
       : super(entity, config, client, errors, isIp: true);
 
   @override

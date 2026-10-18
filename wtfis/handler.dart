@@ -10,7 +10,7 @@ abstract class _BaseHandler {
   final String entity;
 
   /// Errors of all sources, collected instead of thrown.
-  final List<_LookupError> errors;
+  final List<LookupError> errors;
 
   final _VTClient? _vt;
   final _IpEnricherClient<_IpGeoAsn> _geoasn;

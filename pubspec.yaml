@@ -1,19 +1,16 @@
 name: wtfis
 description: >-
   Dart port of wtfis - passive hostname, domain and IP lookup tool.
-  Command-line application that prints the enrichment results as JSON.
+  Single async function lookup() for domains and IP addresses that returns
+  all enrichments plus collected errors as LookupResult.
 version: 0.15.0
 repository: https://github.com/t-m-z/wtfis_port_dart
 publish_to: none
-
-executables:
-  wtfis:
 
 environment:
   sdk: ^3.5.0
 
 dependencies:
-  args: ^2.5.0
   http: ^1.2.0
 
 dev_dependencies:
