@@ -36,7 +36,7 @@ class _IpGeoAsn {
   /// https://ipwhois.io/documentation
   factory _IpGeoAsn.fromIpWhois(_Json j) {
     const m = 'IpWhois';
-    final c = _optMap(j, 'connection', m) ?? const {};
+    final c = _optMap(j, 'connection', m) ?? const <String, dynamic>{};
     return _IpGeoAsn(
       source: 'IPWhois',
       ip: _laxStr(_req<Object>(j, 'ip', m))!,
@@ -142,11 +142,11 @@ class _ShodanIp {
       _req<String>(j, f, m);
     }
     final data = [
-      for (final p in _req<List>(j, 'data', m))
+      for (final p in _mapList(j, 'data', m, required: true))
         _PortData(
-          _req<int>(Map<String, dynamic>.from(p), 'port', m),
-          (p as Map)['product'] as String?,
-          _req<String>(Map<String, dynamic>.from(p), 'transport', m),
+          _req<int>(p, 'port', m),
+          _opt<String>(p, 'product', m),
+          _req<String>(p, 'transport', m),
         ),
     ];
     return _ShodanIp._(j, _req<String>(j, 'ip_str', m), data);
@@ -301,7 +301,7 @@ class _UrlHausUrl {
     required this.reporter,
     required this.larted,
     this.takedownTimeSeconds,
-    this.tags = const [],
+    this.tags = const <String>[],
   });
 
   factory _UrlHausUrl.fromJson(_Json j) {
@@ -356,7 +356,7 @@ class _UrlHaus {
     this.firstseen,
     this.urlCount,
     this.blacklists,
-    this.urls = const [],
+    this.urls = const <_UrlHausUrl>[],
   });
 
   factory _UrlHaus.fromJson(_Json j) {
@@ -375,8 +375,7 @@ class _UrlHaus {
               'surbl': _req<String>(bl, 'surbl', m),
             },
       urls: [
-        for (final u in _opt<List>(j, 'urls', m) ?? const [])
-          _UrlHausUrl.fromJson(Map<String, dynamic>.from(u)),
+        for (final u in _mapList(j, 'urls', m)) _UrlHausUrl.fromJson(u),
       ],
     );
   }

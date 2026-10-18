@@ -95,10 +95,10 @@ class _VtDomain {
     const m = 'Domain';
     final data = _reqMap(json, 'data', m);
     final a = _reqMap(data, 'attributes', m);
-    final results = _reqMap(a, 'last_analysis_results', m).map((k, v) =>
-        MapEntry(k, _AnalysisResult.fromJson(Map<String, dynamic>.from(v))));
-    final ranks = _reqMap(a, 'popularity_ranks', m).map((k, v) =>
-        MapEntry(k, _req<int>(Map<String, dynamic>.from(v), 'rank', m)));
+    final results = _mapOfMaps(a, 'last_analysis_results', m)
+        .map((k, v) => MapEntry(k, _AnalysisResult.fromJson(v)));
+    final ranks = _mapOfMaps(a, 'popularity_ranks', m)
+        .map((k, v) => MapEntry(k, _req<int>(v, 'rank', m)));
     return _VtDomain(
       id: _req<String>(data, 'id', m),
       type: _req<String>(data, 'type', m),
@@ -122,7 +122,10 @@ class _VtDomain {
   /// Splits, lowercases, dedupes and sorts the VT categories.
   static List<String> transformCategories(_Json v) {
     final cats = <String>{};
-    for (final category in v.values.cast<String>()) {
+    for (final Object? category in v.values) {
+      if (category is! String) {
+        throw const _ModelException('Domain: categories must be strings');
+      }
       final delimiter =
           const [', ', ',', '/', ' / '].where(category.contains).firstOrNull;
       if (delimiter != null) {
@@ -199,8 +202,8 @@ class _VtIpAddress {
     const m = 'IpAddress';
     final data = _reqMap(json, 'data', m);
     final a = _reqMap(data, 'attributes', m);
-    final results = _reqMap(a, 'last_analysis_results', m).map((k, v) =>
-        MapEntry(k, _AnalysisResult.fromJson(Map<String, dynamic>.from(v))));
+    final results = _mapOfMaps(a, 'last_analysis_results', m)
+        .map((k, v) => MapEntry(k, _AnalysisResult.fromJson(v)));
     return _VtIpAddress(
       id: _req<String>(data, 'id', m),
       type: _req<String>(data, 'type', m),
@@ -291,8 +294,8 @@ class _Resolutions {
     return _Resolutions(
       _req<int>(_reqMap(json, 'meta', m), 'count', m),
       [
-        for (final r in _req<List>(json, 'data', m))
-          _Resolution.fromJson(Map<String, dynamic>.from(r)),
+        for (final r in _mapList(json, 'data', m, required: true))
+          _Resolution.fromJson(r),
       ],
     );
   }

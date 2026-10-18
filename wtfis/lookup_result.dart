@@ -114,7 +114,8 @@ class LookupResult {
 
   LookupResult(this.entity,
       {this.type, this.data, List<LookupError>? errors})
-      : errors = List.unmodifiable(errors ?? const []);
+      : errors = List<LookupError>.unmodifiable(
+            errors ?? const <LookupError>[]);
 
   /// `true` if no error occurred.
   bool get ok => errors.isEmpty;

@@ -14,7 +14,7 @@ abstract class _BaseClient {
 
   String get name;
   String get baseUrl;
-  Map<String, String> get defaultHeaders => const {};
+  Map<String, String> get defaultHeaders => const <String, String>{};
 
   /// GET request returning the decoded JSON object, or `null` on error.
   ///
@@ -67,10 +67,14 @@ abstract class _BaseClient {
     } on FormatException catch (e) {
       return _modelError('Invalid JSON: ${e.message}', uri);
     }
-    if (decoded is! Map) {
+    if (decoded is! Map<dynamic, dynamic>) {
       return _modelError('Expected a JSON object', uri);
     }
-    return Map<String, dynamic>.from(decoded);
+    try {
+      return _asJson(decoded, 'response');
+    } on _ModelException catch (e) {
+      return _modelError(e.message, uri);
+    }
   }
 
   Null _networkError(Uri uri, String message) {
@@ -164,7 +168,7 @@ class _Ip2WhoisClient extends _BaseClient implements _WhoisClient {
 
   static int? _errorCode(http.Response resp) {
     try {
-      final body = jsonDecode(utf8.decode(resp.bodyBytes));
+      final Object? body = jsonDecode(utf8.decode(resp.bodyBytes));
       if (body case {'error': {'error_code': final int code}}) return code;
     } on FormatException {
       // not JSON

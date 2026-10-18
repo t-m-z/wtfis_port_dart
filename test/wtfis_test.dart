@@ -55,10 +55,10 @@ MockClient gistApis(
     Object? vtDomainBody,
     int? shodanStatus,
     List<Uri>? requests}) {
-  final ipwhois = testData('ipwhois_gist.json') as Map;
-  final shodan = testData('shodan_gist.json') as Map;
-  final ipinfo = testData('ipinfo_gist.json') as Map;
-  final ip2location = testData('ip2location_gist.json') as Map;
+  final ipwhois = testData('ipwhois_gist.json') as Map<String, dynamic>;
+  final shodan = testData('shodan_gist.json') as Map<String, dynamic>;
+  final ipinfo = testData('ipinfo_gist.json') as Map<String, dynamic>;
+  final ip2location = testData('ip2location_gist.json') as Map<String, dynamic>;
   return MockClient((req) async {
     requests?.add(req.url);
     final url = req.url;
@@ -96,7 +96,8 @@ MockClient gistApis(
         expect(req.method, 'POST');
         expect(req.headers['Auth-Key'], 'eve');
         return jsonResponse(
-            (testData('urlhaus_gist.json') as Map)['gist.github.com']);
+            (testData('urlhaus_gist.json')
+                as Map<String, dynamic>)['gist.github.com']);
     }
     return http.Response('not found', 404);
   });
@@ -104,7 +105,8 @@ MockClient gistApis(
 
 /// Mock of all APIs serving the "1.1.1.1" fixtures (for any queried IP).
 MockClient ipApis({List<Uri>? requests, int? status}) {
-  Object? one(String file) => (testData(file) as Map)['1.1.1.1'];
+  Object? one(String file) =>
+      (testData(file) as Map<String, dynamic>)['1.1.1.1'];
   return MockClient((req) async {
     requests?.add(req.url);
     if (status != null) {
@@ -175,7 +177,7 @@ void main() {
 
       final res = out['resolutions'];
       expect(res['total'], 37);
-      expect((res['data'] as List).map((r) => r['ip']),
+      expect((res['data'] as List<dynamic>).map((dynamic r) => r['ip']),
           ['13.234.210.38', '192.30.255.113', '13.234.176.102']);
       final first = res['data'][0];
       expect(first['resolved'], '2022-08-06T14:56:20Z');
@@ -303,7 +305,7 @@ void main() {
           keys: vt, client: gistApis(vtStatus: 401));
       expect(out['ok'], isFalse);
       expect(out['virustotal'], isNull);
-      final errors = out['errors'] as List;
+      final errors = out['errors'] as List<dynamic>;
       // domain, resolutions and whois (VT fallback) all fail
       expect(errors, hasLength(3));
       expect(errors[0], {
@@ -365,7 +367,7 @@ void main() {
       final out = await runJson('gist.github.com',
           keys: vt,
           client: gistApis(vtDomainBody: {'intentionally': 'wrong data'}));
-      final errors = out['errors'] as List;
+      final errors = out['errors'] as List<dynamic>;
       expect(errors, hasLength(1));
       expect(errors[0]['type'], 'model');
       expect(errors[0]['source'], 'Virustotal');

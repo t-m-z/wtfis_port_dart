@@ -34,7 +34,7 @@ class _Whois {
     this.state,
     this.country,
     this.postalCode,
-    this.nameServers = const [],
+    this.nameServers = const <String>[],
     this.dateCreated,
     this.dateChanged,
     this.dateExpires,
@@ -48,8 +48,8 @@ class _Whois {
     final v = Map<String, dynamic>.from(json);
 
     // Surface registrant fields to root level
-    final registrant = v.remove('registrant');
-    if (registrant is Map && registrant.isNotEmpty) {
+    final Object? registrant = v.remove('registrant');
+    if (registrant is Map<dynamic, dynamic> && registrant.isNotEmpty) {
       for (final f in const [
         'organization',
         'name',
@@ -66,12 +66,13 @@ class _Whois {
     }
 
     // Convert registrar from object to simply registrar.name
-    final registrar = v['registrar'];
+    final Object? registrar = v['registrar'];
     return _Whois(
       source: 'ip2whois',
       domain: _opt<String>(v, 'domain', m) ?? '',
-      registrar:
-          registrar is Map ? registrar['name'] as String? : _laxStr(registrar),
+      registrar: registrar is Map<dynamic, dynamic>
+          ? _laxStr(registrar['name'])
+          : _laxStr(registrar),
       organization: _opt<String>(v, 'organization', m),
       name: _opt<String>(v, 'name', m),
       email: _opt<String>(v, 'email', m),
@@ -94,15 +95,18 @@ class _Whois {
   /// only the latest record is used).
   factory _Whois.fromVirustotal(_Json json) {
     const m = 'VirustotalWhois';
-    final data = json['data'];
-    if (data is! List || data.isEmpty) {
+    final records = _mapList(json, 'data', m);
+    if (records.isEmpty) {
       return const _Whois(source: 'virustotal', domain: '');
     }
 
     // Flatten
     final attrs =
-        Map<String, dynamic>.from((data.first as Map)['attributes'] ?? {});
-    final whoisMap = Map<String, dynamic>.from(attrs.remove('whois_map') ?? {});
+        _optMap(records.first, 'attributes', m) ?? <String, dynamic>{};
+    final Object? rawWhoisMap = attrs.remove('whois_map');
+    final whoisMap = rawWhoisMap == null
+        ? <String, dynamic>{}
+        : _asJson(rawWhoisMap, '$m: field "whois_map"');
     final t = <String, dynamic>{...whoisMap, ...attrs};
 
     // Normalized fields with multiple possible sources
@@ -143,7 +147,8 @@ class _Whois {
       state: dedupe(t['Registrant State/Province']),
       country: dedupe(country),
       postalCode: dedupe(t['Registrant Postal Code']),
-      nameServers: ns == null ? const [] : ns.toLowerCase().split(' | '),
+      nameServers:
+          ns == null ? const <String>[] : ns.toLowerCase().split(' | '),
       dateCreated: dedupe(dateCreated),
       dateChanged: dedupe(dateChanged),
       dateExpires: dedupe(dateExpires),
