@@ -1,19 +1,10 @@
-/// Dart port of wtfis - passive hostname, domain and IP lookup tool.
-library;
-
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'src/config.dart';
-import 'src/domain_handler.dart';
-import 'src/utils.dart';
-
-export 'src/clients.dart';
-export 'src/config.dart' show WtfisConfig, loadEnvFile;
-export 'src/domain_handler.dart';
-export 'src/exceptions.dart';
-export 'src/utils.dart' show isIp, refang, standardizeTimestamp;
+import 'config.dart';
+import 'domain_handler.dart';
+import 'utils.dart';
 
 /// Looks up [domain] (domain or FQDN, defanged input like `example[.]com` is
 /// accepted) at all configured sources and returns the result as a JSON

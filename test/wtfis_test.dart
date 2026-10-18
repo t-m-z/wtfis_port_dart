@@ -4,10 +4,14 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
-import 'package:wtfis/src/models/ip_enrichment.dart';
-import 'package:wtfis/src/models/virustotal.dart';
-import 'package:wtfis/src/models/whois.dart';
-import 'package:wtfis/wtfis.dart';
+
+import '../bin/src/config.dart';
+import '../bin/src/exceptions.dart';
+import '../bin/src/lookup.dart';
+import '../bin/src/models/ip_enrichment.dart';
+import '../bin/src/models/virustotal.dart';
+import '../bin/src/models/whois.dart';
+import '../bin/src/utils.dart';
 
 dynamic testData(String name) =>
     jsonDecode(File('test/test_data/$name').readAsStringSync());

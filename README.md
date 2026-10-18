@@ -3,18 +3,30 @@
 Dart-Port von [wtfis](https://github.com/t-m-z/wtfis) (Original: [pirxthepilot/wtfis](https://github.com/pirxthepilot/wtfis)),
 einem Tool für passive Domain-/Hostname-Lookups.
 
-Kern des Ports ist **eine Funktion, die eine Domain entgegennimmt und das Ergebnis als JSON-String liefert**:
-
-```dart
-import 'package:wtfis/wtfis.dart';
-
-Future<void> main() async {
-  final json = await lookupDomain('gist.github.com', pretty: true);
-  print(json);
-}
-```
+Der Port ist eine reine Kommandozeilen-Anwendung – keine Library, keine `export`-Anweisungen.
+Kern ist **eine Funktion, die eine Domain entgegennimmt und das Ergebnis als JSON-String liefert**:
+`lookupDomain()` in [`bin/src/lookup.dart`](bin/src/lookup.dart).
 
 Da Netzwerkzugriffe in Dart asynchron sind, liefert die Funktion ein `Future<String>`.
+
+## Aufbau
+
+```
+bin/
+  wtfis.dart            # Einstiegspunkt (CLI)
+  src/
+    lookup.dart         # lookupDomain()
+    domain_handler.dart # Ablauf des Domain-Lookups
+    clients.dart        # API-Clients
+    config.dart         # WtfisConfig, ~/.env.wtfis
+    exceptions.dart
+    utils.dart
+    models/             # Datenmodelle der APIs
+test/
+  wtfis_test.dart       # importiert die Dateien direkt aus bin/src/
+```
+
+Jede Datei importiert die benötigten Dateien direkt über relative Pfade.
 
 ## Signatur
 
@@ -52,6 +64,7 @@ Wie im Original werden API-Keys aus Umgebungsvariablen bzw. `~/.env.wtfis` geles
 Die Konfiguration kann auch direkt übergeben werden:
 
 ```dart
+// innerhalb von bin/ bzw. test/
 final json = await lookupDomain(
   'example.com',
   config: WtfisConfig(vtApiKey: '...', urlHausApiKey: '...', all: true, maxResolutions: 5),
@@ -99,7 +112,10 @@ Zeitstempel werden – wie in der Anzeige des Originals – in `YYYY-MM-DDTHH:MM
 ## Kommandozeile
 
 ```bash
+dart pub get
 dart run bin/wtfis.dart -p gist.github.com
+# oder kompiliert:
+dart compile exe bin/wtfis.dart -o wtfis
 ```
 
 Optionen: `-A/--all`, `-s/--use-shodan`, `-g/--use-greynoise`, `-a/--use-abuseipdb`,

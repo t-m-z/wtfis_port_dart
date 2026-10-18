@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
-import 'package:wtfis/wtfis.dart';
+
+import 'src/config.dart';
+import 'src/exceptions.dart';
+import 'src/lookup.dart';
 
 Future<void> main(List<String> arguments) async {
   final parser = ArgParser()
