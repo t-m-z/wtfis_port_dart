@@ -14,6 +14,8 @@ part 'clients.dart';
 part 'config.dart';
 part 'domain_handler.dart';
 part 'exceptions.dart';
+part 'handler.dart';
+part 'ip_handler.dart';
 part 'lookup_result.dart';
 part 'models/ip_enrichment.dart';
 part 'models/json.dart';
@@ -21,8 +23,9 @@ part 'models/virustotal.dart';
 part 'models/whois.dart';
 part 'utils.dart';
 
-/// Looks up [domain] (domain or FQDN, defanged input like `example[.]com` is
-/// accepted) at all configured sources.
+/// Looks up [input] at all configured sources. [input] is a domain / FQDN
+/// or a public IPv4 / IPv6 address; defanged input like `example[.]com` or
+/// `1[.]1[.]1[.]1` is accepted.
 ///
 /// API keys and `WTFIS_DEFAULTS` are read from [environment] (default: the
 /// process environment) and [envFile] (default: `~/.env.wtfis`); variables
@@ -30,7 +33,8 @@ part 'utils.dart';
 /// line options and are toggled by `WTFIS_DEFAULTS` like in the original:
 ///
 /// * [all], [useShodan], [useGreynoise], [useAbuseIpDb], [useUrlHaus]
-/// * [maxResolutions] (0..10) - number of resolutions to enrich
+/// * [maxResolutions] (0..10) - number of resolutions to enrich (domains
+///   only; a non-default value for an IP address is a config error)
 /// * [geolocationService] - `ip2location`, `ipinfo` or `ipwhois` (default)
 /// * [httpClient] can be injected (e.g. for tests); otherwise a client is
 ///   created and closed internally.
@@ -48,7 +52,7 @@ part 'utils.dart';
 /// through type inference.
 // ignore: library_private_types_in_public_api
 Future<_LookupResult> lookup(
-  String domain, {
+  String input, {
   bool all = false,
   bool useShodan = false,
   bool useGreynoise = false,
@@ -60,13 +64,28 @@ Future<_LookupResult> lookup(
   String? envFile,
   http.Client? httpClient,
 }) async {
-  final entity = _refang(domain).trim();
+  final ip = _parseIp(input);
+  final type = ip == null ? 'domain' : 'ip';
+  // Canonical notation, e.g. 2606:4700:4700:0:0:0:0:1111
+  // -> 2606:4700:4700::1111
+  final entity = ip == null
+      ? _refang(input).trim()
+      : InternetAddress.fromRawAddress(ip.rawAddress).address;
 
-  if (entity.isEmpty || _isIp(entity)) {
-    return _LookupResult(entity, errors: [
-      _LookupError(_LookupErrorKind.input, 'input',
-          'Expected a domain or FQDN (got "$domain")'),
-    ]);
+  _LookupResult inputError(String message, {String? type}) =>
+      _LookupResult(entity, type: type, errors: [
+        _LookupError(
+            _LookupErrorKind.input, 'input', '$message (got "$input")'),
+      ]);
+
+  if (entity.isEmpty) {
+    return inputError('Expected a domain, FQDN or IP address');
+  }
+  if (ip != null && !_isGlobal(ip)) {
+    return inputError(
+        'Not a public IP address (private, loopback, link-local, multicast, '
+        'documentation or reserved range)',
+        type: type);
   }
 
   final _WtfisConfig cfg;
@@ -84,18 +103,25 @@ Future<_LookupResult> lookup(
     );
   } on Object catch (e) {
     // e.g. unreadable ~/.env.wtfis
-    return _LookupResult(entity, errors: [
+    return _LookupResult(entity, type: type, errors: [
       _LookupError(_LookupErrorKind.config, 'config', e.toString()),
     ]);
   }
-  final configErrors = cfg.validate();
+  final configErrors = [
+    ...cfg.validate(),
+    if (ip != null && maxResolutions != _defaultMaxResolutions)
+      _LookupError(_LookupErrorKind.config, 'config',
+          'maxResolutions is not applicable to IP addresses'),
+  ];
   if (configErrors.isNotEmpty) {
-    return _LookupResult(entity, errors: configErrors);
+    return _LookupResult(entity, type: type, errors: configErrors);
   }
 
   final errors = <_LookupError>[];
   final client = httpClient ?? http.Client();
-  final handler = _DomainHandler(entity, cfg, client, errors);
+  final _BaseHandler handler = ip == null
+      ? _DomainHandler(entity, cfg, client, errors)
+      : _IpAddressHandler(entity, cfg, client, errors);
   try {
     await handler.fetchData();
   } on Object catch (e) {
@@ -106,5 +132,6 @@ Future<_LookupResult> lookup(
   } finally {
     if (httpClient == null) client.close();
   }
-  return _LookupResult(entity, data: handler.toJson(), errors: errors);
+  return _LookupResult(entity,
+      type: handler.type, data: handler.toJson(), errors: errors);
 }

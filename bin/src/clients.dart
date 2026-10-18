@@ -129,6 +129,9 @@ class _VTClient extends _BaseClient implements _WhoisClient {
   Future<_VtDomain?> getDomain(String domain) async =>
       parse(await get('/domains/$domain'), _VtDomain.fromJson);
 
+  Future<_VtIpAddress?> getIpAddress(String ip) async =>
+      parse(await get('/ip_addresses/$ip'), _VtIpAddress.fromJson);
+
   Future<_Resolutions?> getDomainResolutions(String domain) async => parse(
       await get('/domains/$domain/resolutions'), _Resolutions.fromJson);
 

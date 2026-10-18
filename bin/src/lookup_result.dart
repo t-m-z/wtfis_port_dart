@@ -95,19 +95,25 @@ class _LookupError {
       '$source: $message${url == null ? '' : ' for url: $url'}';
 }
 
-/// Result of a domain lookup: the collected data plus all errors that
+/// Result of a domain or IP lookup: the collected data plus all errors that
 /// occurred. Errors never abort the lookup; sources that failed are `null`
 /// in [data] and listed in [errors].
 class _LookupResult {
   final String entity;
 
-  /// Enrichment data (`virustotal`, `urlhaus`, `resolutions`, `whois`), or
-  /// `null` if the lookup could not be started (input/config errors).
+  /// `domain` or `ip`; `null` if the input could not be recognized.
+  final String? type;
+
+  /// Enrichment data, or `null` if the lookup could not be started
+  /// (input/config errors). Domains: `virustotal`, `urlhaus`, `resolutions`,
+  /// `whois`; IPs: `virustotal`, `geoasn`, `shodan`, `greynoise`,
+  /// `abuseipdb`, `urlhaus`, `whois`.
   final _Json? data;
 
   final List<_LookupError> errors;
 
-  _LookupResult(this.entity, {this.data, List<_LookupError>? errors})
+  _LookupResult(this.entity,
+      {this.type, this.data, List<_LookupError>? errors})
       : errors = List.unmodifiable(errors ?? const []);
 
   /// `true` if no error occurred.
@@ -121,7 +127,7 @@ class _LookupResult {
 
   _Json toJson() => {
         'entity': entity,
-        'type': 'domain',
+        'type': type,
         'ok': ok,
         ...?data,
         'errors': [for (final e in errors) e.toJson()],

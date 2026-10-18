@@ -146,9 +146,11 @@ class _WtfisConfig {
         _ => _IpWhoisClient(c, e),
       };
 
-  /// IP2Whois is preferred for domains; Virustotal is the fallback.
-  _WhoisClient? whoisClient(http.Client c, List<_LookupError> e) {
-    if (ip2WhoisApiKey.isNotEmpty) {
+  /// IP2Whois is preferred for domains (it does not support IPs);
+  /// Virustotal is the fallback.
+  _WhoisClient? whoisClient(http.Client c, List<_LookupError> e,
+      {bool isIp = false}) {
+    if (ip2WhoisApiKey.isNotEmpty && !isIp) {
       return _Ip2WhoisClient(ip2WhoisApiKey, c, e);
     }
     if (vtApiKey.isNotEmpty) return _VTClient(vtApiKey, c, e);

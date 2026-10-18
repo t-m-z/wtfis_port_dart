@@ -161,6 +161,91 @@ class _VtDomain {
       };
 }
 
+/// Port of `IpAddress` / `IpAttributes`.
+class _VtIpAddress {
+  final String id;
+  final String type;
+  final String? jarm;
+  final Map<String, _AnalysisResult> lastAnalysisResults;
+  final _LastAnalysisStats lastAnalysisStats;
+  final int? lastHttpsCertificateDate;
+  final int? lastModificationDate;
+  final int reputation;
+  final List<String> tags;
+  final String? asn;
+  final String? asOwner;
+  final String? continent;
+  final String? country;
+  final String? network;
+
+  const _VtIpAddress({
+    required this.id,
+    required this.type,
+    this.jarm,
+    required this.lastAnalysisResults,
+    required this.lastAnalysisStats,
+    this.lastHttpsCertificateDate,
+    this.lastModificationDate,
+    required this.reputation,
+    required this.tags,
+    this.asn,
+    this.asOwner,
+    this.continent,
+    this.country,
+    this.network,
+  });
+
+  factory _VtIpAddress.fromJson(_Json json) {
+    const m = 'IpAddress';
+    final data = _reqMap(json, 'data', m);
+    final a = _reqMap(data, 'attributes', m);
+    final results = _reqMap(a, 'last_analysis_results', m).map((k, v) =>
+        MapEntry(k, _AnalysisResult.fromJson(Map<String, dynamic>.from(v))));
+    return _VtIpAddress(
+      id: _req<String>(data, 'id', m),
+      type: _req<String>(data, 'type', m),
+      jarm: _opt<String>(a, 'jarm', m),
+      lastAnalysisResults: results,
+      lastAnalysisStats:
+          _LastAnalysisStats.fromJson(_reqMap(a, 'last_analysis_stats', m)),
+      lastHttpsCertificateDate: _opt<int>(a, 'last_https_certificate_date', m),
+      lastModificationDate: _opt<int>(a, 'last_modification_date', m),
+      reputation: _req<int>(a, 'reputation', m),
+      tags: _listOf<String>(a, 'tags', m, required: true),
+      asn: _laxStr(a['asn']),
+      asOwner: _opt<String>(a, 'as_owner', m),
+      continent: _opt<String>(a, 'continent', m),
+      country: _opt<String>(a, 'country', m),
+      network: _opt<String>(a, 'network', m),
+    );
+  }
+
+  /// Vendors whose verdict was "malicious".
+  List<String> get maliciousVendors => [
+        for (final e in lastAnalysisResults.entries)
+          if (e.value.category == 'malicious') e.key,
+      ];
+
+  _Json toJson() => {
+        'id': id,
+        'type': type,
+        'link': 'https://www.virustotal.com/gui/ip-address/$id',
+        'last_analysis_stats': lastAnalysisStats.toJson(),
+        'malicious_vendors': maliciousVendors,
+        'reputation': reputation,
+        'tags': tags,
+        'asn': asn,
+        'as_owner': asOwner,
+        'network': network,
+        'continent': continent,
+        'country': country,
+        'jarm': jarm,
+        'last_modification_date': _standardizeTimestamp(lastModificationDate),
+        'last_https_certificate_date':
+            _standardizeTimestamp(lastHttpsCertificateDate),
+      };
+}
+
 class _Resolution {
   final int date;
   final String hostName;

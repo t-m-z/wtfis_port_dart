@@ -105,6 +105,46 @@ MockClient gistApis(
   });
 }
 
+/// Mock of all APIs serving the "1.1.1.1" fixtures (for any queried IP).
+MockClient ipApis({List<Uri>? requests, int? status}) {
+  Object? one(String file) => (testData(file) as Map)['1.1.1.1'];
+  return MockClient((req) async {
+    requests?.add(req.url);
+    if (status != null) {
+      return http.Response('<html><body>Service Unavailable</body></html>',
+          status,
+          headers: {'content-type': 'text/html'});
+    }
+    final url = req.url;
+    switch (url.host) {
+      case 'www.virustotal.com':
+        return url.path.endsWith('/historical_whois')
+            ? jsonResponse(testData('vt_whois_1.1.1.1.json'))
+            : jsonResponse(testData('vt_ip_1.1.1.1.json'));
+      case 'ipwho.is':
+        return jsonResponse(one('ipwhois_1.1.1.1.json'));
+      case 'api.shodan.io':
+        return jsonResponse(one('shodan_1.1.1.1.json'));
+      case 'api.greynoise.io':
+        return jsonResponse(one('greynoise_1.1.1.1.json'));
+      case 'api.abuseipdb.com':
+        return jsonResponse(testData('abuseipdb_1.1.1.1_raw.json'));
+      case 'urlhaus-api.abuse.ch':
+        return jsonResponse(one('urlhaus_1.1.1.1.json'));
+    }
+    return http.Response('not found', 404);
+  });
+}
+
+const allKeys = {
+  'VT_API_KEY': 'foo',
+  'IP2WHOIS_API_KEY': 'alice',
+  'SHODAN_API_KEY': 'hunter2',
+  'GREYNOISE_API_KEY': 'carol',
+  'ABUSEIPDB_API_KEY': 'dave',
+  'URLHAUS_API_KEY': 'eve',
+};
+
 void main() {
   group('lookup', () {
     test('returns enriched data (VT + IPWhois + VT whois)', () async {
@@ -161,6 +201,7 @@ void main() {
     test('result object offers data and errors', () async {
       final result = await run('gist.github.com', env: vt);
       expect(result.entity, 'gist.github.com');
+      expect(result.type, 'domain');
       expect(result.ok, isTrue);
       expect(result.aborted, isFalse);
       expect(result.data['virustotal'], isNotNull);
@@ -335,17 +376,9 @@ void main() {
       expect(out['whois'], isNotNull);
     });
 
-    for (final ip in ['1.1.1.1', '1[.]1[.]1[.]1', '2606:4700:4700::1111']) {
-      test('rejects IP address $ip with an input error', () async {
-        final result = await run(ip);
-        expect(result.aborted, isTrue);
-        expect(result.errors.single.kind.name, 'input');
-        expect(result.toJson()['errors'][0]['type'], 'input');
-      });
-    }
-
     test('rejects empty input', () async {
       final result = await run('  ');
+      expect(result.type, isNull);
       expect(result.errors.single.kind.name, 'input');
     });
 
@@ -360,6 +393,130 @@ void main() {
         expect(r.aborted, isTrue);
         expect(r.errors.single.kind.name, 'config');
         expect(r.errors.single.source, 'config');
+      }
+    });
+  });
+
+  group('IP addresses', () {
+    test('IPv4 with all sources', () async {
+      final requests = <Uri>[];
+      final result = await run('1.1.1.1',
+          env: allKeys, all: true, client: ipApis(requests: requests));
+      expect(result.ok, isTrue, reason: '${result.errors}');
+      expect(result.type, 'ip');
+      expect(result.entity, '1.1.1.1');
+
+      final out = jsonDecode(result.toJsonString()) as Map<String, dynamic>;
+      expect(out['type'], 'ip');
+      expect(out.containsKey('resolutions'), isFalse);
+
+      final v = out['virustotal'];
+      expect(v['id'], '1.1.1.1');
+      expect(v['type'], 'ip_address');
+      expect(v['link'], 'https://www.virustotal.com/gui/ip-address/1.1.1.1');
+      expect(v['asn'], '13335');
+      expect(v['as_owner'], 'CLOUDFLARENET');
+      expect(v['network'], '1.1.1.0/24');
+      expect(v['reputation'], 134);
+      expect(v['last_modification_date'], '2022-09-03T06:47:04Z');
+
+      expect(out['geoasn']['source'], 'IPWhois');
+      expect(out['geoasn']['ip'], '1.1.1.1');
+      expect(out['shodan']['ip'], '1.1.1.1');
+      expect(out['greynoise']['ip'], '1.1.1.1');
+      expect(out['greynoise']['riot'], isTrue);
+      expect(out['abuseipdb']['ip_address'], '1.1.1.1');
+      expect(out['abuseipdb']['abuse_confidence_score'], 100);
+      expect(out['urlhaus']['host'], '1.1.1.1');
+      expect(out['whois']['source'], 'virustotal');
+
+      // IP2Whois only supports domains: VT is used for the IP whois
+      expect(requests.map((u) => u.host), isNot(contains('api.ip2whois.com')));
+      expect(requests.map((u) => u.path), containsAll([
+        '/api/v3/ip_addresses/1.1.1.1',
+        '/api/v3/ip_addresses/1.1.1.1/historical_whois',
+      ]));
+    });
+
+    test('defanged IPv4', () async {
+      final result =
+          await run('1[.]1[.]1[.]1', env: vt, client: ipApis());
+      expect(result.entity, '1.1.1.1');
+      expect(result.type, 'ip');
+      expect(result.ok, isTrue);
+    });
+
+    for (final input in [
+      '2606:4700:4700::1111',
+      '2606:4700:4700:0:0:0:0:1111',
+      '2606:4700:4700[:]:1111',
+      '[2606:4700:4700::1111]',
+    ]) {
+      test('IPv6 $input is normalized and looked up', () async {
+        final requests = <Uri>[];
+        final result =
+            await run(input, env: vt, client: ipApis(requests: requests));
+        expect(result.ok, isTrue, reason: '${result.errors}');
+        expect(result.type, 'ip');
+        expect(result.entity, '2606:4700:4700::1111');
+        expect(requests.map((u) => u.path),
+            contains('/api/v3/ip_addresses/2606:4700:4700::1111'));
+        expect(requests.map((u) => u.toString()),
+            contains('https://ipwho.is/2606:4700:4700::1111'));
+        // the single queried IP is used even if the API keys it differently
+        expect(result.data['geoasn'], isNotNull);
+      });
+    }
+
+    for (final input in [
+      '10.0.0.1',
+      '192.168.1.1',
+      '127.0.0.1',
+      '169.254.1.1',
+      '::1',
+      'fe80::1',
+      'fd00::1',
+      '2001:db8::1',
+    ]) {
+      test('non-public IP $input is an input error', () async {
+        final requests = <Uri>[];
+        final result =
+            await run(input, env: vt, client: ipApis(requests: requests));
+        expect(requests, isEmpty);
+        expect(result.aborted, isTrue);
+        expect(result.type, 'ip');
+        expect(result.errors.single.kind.name, 'input');
+        expect(result.errors.single.message,
+            startsWith('Not a public IP address'));
+      });
+    }
+
+    test('maxResolutions is not applicable to IPs', () async {
+      final result =
+          await run('1.1.1.1', env: vt, maxResolutions: 5, client: ipApis());
+      expect(result.aborted, isTrue);
+      expect(result.errors.single.kind.name, 'config');
+    });
+
+    test('HTTP errors are collected per source', () async {
+      final result = await run('1.1.1.1',
+          env: allKeys, all: true, client: ipApis(status: 503));
+      expect(result.ok, isFalse);
+      expect(result.aborted, isFalse);
+      expect(
+          result.errors.map((e) => e.source).toSet(),
+          containsAll([
+            'IPWhois',
+            'Virustotal',
+            'Shodan',
+            'URLhaus',
+            'Greynoise',
+            'AbuseIPDB',
+          ]));
+      expect(result.errors.map((e) => e.statusCode), everyElement(503));
+      expect(result.errors.first.body, contains('Service Unavailable'));
+      for (final key in allKeys.values) {
+        expect(result.toJsonString(), isNot(contains(key)));
       }
     });
   });

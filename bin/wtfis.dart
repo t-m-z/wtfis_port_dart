@@ -17,12 +17,12 @@ Future<void> main(List<String> arguments) async {
     ..addFlag('use-abuseipdb',
         abbr: 'a', negatable: false, help: 'Enable AbuseIPDB for IPs')
     ..addFlag('use-urlhaus',
-        abbr: 'u', negatable: false, help: 'Enable URLhaus for domains')
+        abbr: 'u', negatable: false, help: 'Enable URLhaus for domains and IPs')
     ..addOption('max-resolutions',
         abbr: 'm',
         valueHelp: 'N',
         defaultsTo: '3',
-        help: 'Maximum number of resolutions to show')
+        help: 'Maximum number of resolutions to show (domains only)')
     ..addOption('geolocation-service',
         allowed: ['ip2location', 'ipinfo', 'ipwhois'],
         help: 'Geolocation service to use (default: ipwhois)')
@@ -40,7 +40,7 @@ Future<void> main(List<String> arguments) async {
     return;
   }
   if (args.flag('help') || args.rest.length != 1) {
-    stdout.writeln('Usage: wtfis [options] <domain>\n\n${parser.usage}');
+    stdout.writeln('Usage: wtfis [options] <domain|ip>\n\n${parser.usage}');
     exitCode = args.flag('help') ? 0 : 64;
     return;
   }

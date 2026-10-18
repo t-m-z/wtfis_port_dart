@@ -3,11 +3,21 @@ part of 'lookup.dart';
 /// Strip `[]`s out of text (e.g. `example[.]com` -> `example.com`).
 String _refang(String text) => text.replaceAll('[', '').replaceAll(']', '');
 
+/// Parses [text] (defanged allowed) as IPv4 or IPv6 address, or `null` if
+/// it is no IP address at all.
+InternetAddress? _parseIp(String text) {
+  final s = _refang(text).trim();
+  return s.isEmpty ? null : InternetAddress.tryParse(s);
+}
+
 /// Whether [text] is a globally routable IPv4/IPv6 address
 /// (mirrors Python's `ipaddress.ip_address(...).is_global`).
 bool _isIp(String text) {
-  final addr = InternetAddress.tryParse(_refang(text));
-  if (addr == null) return false;
+  final addr = _parseIp(text);
+  return addr != null && _isGlobal(addr);
+}
+
+bool _isGlobal(InternetAddress addr) {
   final b = addr.rawAddress;
   if (addr.type == InternetAddressType.IPv4) {
     bool inNet(List<int> net, int prefix) {
