@@ -1,28 +1,16 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io' show IOException;
-
-import 'package:http/http.dart' as http;
-
-import 'exceptions.dart';
-import 'lookup_result.dart';
-import 'models/ip_enrichment.dart';
-import 'models/json.dart';
-import 'models/virustotal.dart';
-import 'models/whois.dart';
-import 'utils.dart';
+part of 'lookup.dart';
 
 /// Base client using `package:http` (port of `BaseRequestsClient`).
 ///
 /// No method throws: HTTP, network and data errors are appended to [errors]
 /// and the affected call returns `null` (or skips the affected item).
-abstract class BaseClient {
+abstract class _BaseClient {
   final http.Client http_;
 
   /// Shared error list of the running lookup.
-  final List<LookupError> errors;
+  final List<_LookupError> errors;
 
-  BaseClient(this.http_, this.errors);
+  _BaseClient(this.http_, this.errors);
 
   String get name;
   String get baseUrl;
@@ -32,7 +20,7 @@ abstract class BaseClient {
   ///
   /// Non-2xx responses for which [tolerate] returns `true` are not errors;
   /// they yield an empty map ("no data").
-  Future<Json?> get(String path,
+  Future<_Json?> get(String path,
       {Map<String, String>? params,
       Map<String, String>? headers,
       bool Function(http.Response)? tolerate}) {
@@ -45,7 +33,7 @@ abstract class BaseClient {
 
   /// POST request (form data) returning the decoded JSON object, or `null`
   /// on error.
-  Future<Json?> post(String path,
+  Future<_Json?> post(String path,
       {Map<String, String>? data, Map<String, String>? headers}) {
     final uri = Uri.parse(baseUrl + path);
     return _request(
@@ -54,7 +42,7 @@ abstract class BaseClient {
             .post(uri, body: data, headers: {...defaultHeaders, ...?headers}));
   }
 
-  Future<Json?> _request(Uri uri, Future<http.Response> Function() send,
+  Future<_Json?> _request(Uri uri, Future<http.Response> Function() send,
       {bool Function(http.Response)? tolerate}) async {
     final http.Response resp;
     try {
@@ -69,7 +57,7 @@ abstract class BaseClient {
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       if (tolerate != null && tolerate(resp)) return <String, dynamic>{};
-      errors.add(LookupError.http(name, resp, uri));
+      errors.add(_LookupError.http(name, resp, uri));
       return null;
     }
 
@@ -86,12 +74,12 @@ abstract class BaseClient {
   }
 
   Null _networkError(Uri uri, String message) {
-    errors.add(LookupError(LookupErrorKind.network, name, message, url: uri));
+    errors.add(_LookupError(_LookupErrorKind.network, name, message, url: uri));
     return null;
   }
 
   Null _modelError(String message, [Uri? uri]) {
-    errors.add(LookupError(LookupErrorKind.model, name,
+    errors.add(_LookupError(_LookupErrorKind.model, name,
         'Data model validation error: $message',
         url: uri));
     return null;
@@ -100,11 +88,11 @@ abstract class BaseClient {
   /// Builds a model from [json]; validation errors are recorded and yield
   /// `null`. A `null` [json] (request failed, already recorded) yields
   /// `null` as well.
-  T? parse<T>(Json? json, T Function(Json json) build) {
+  T? parse<T>(_Json? json, T Function(_Json json) build) {
     if (json == null) return null;
     try {
       return build(json);
-    } on ModelException catch (e) {
+    } on _ModelException catch (e) {
       return _modelError(e.message);
     } on TypeError catch (e) {
       return _modelError(e.toString());
@@ -115,20 +103,20 @@ abstract class BaseClient {
 }
 
 /// Client used for whois lookups.
-abstract interface class WhoisClient {
+abstract interface class _WhoisClient {
   String get name;
-  Future<Whois?> getWhois(String entity);
+  Future<_Whois?> getWhois(String entity);
 }
 
 /// Client used for IP enrichments.
-abstract interface class IpEnricherClient<T> {
+abstract interface class _IpEnricherClient<T> {
   String get name;
   Future<Map<String, T>> enrichIps(List<String> ips);
 }
 
-class VTClient extends BaseClient implements WhoisClient {
+class _VTClient extends _BaseClient implements _WhoisClient {
   final String apiKey;
-  VTClient(this.apiKey, super.http_, super.errors);
+  _VTClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'Virustotal';
@@ -138,23 +126,23 @@ class VTClient extends BaseClient implements WhoisClient {
   Map<String, String> get defaultHeaders =>
       {'x-apikey': apiKey, 'Accept': 'application/json'};
 
-  Future<VtDomain?> getDomain(String domain) async =>
-      parse(await get('/domains/$domain'), VtDomain.fromJson);
+  Future<_VtDomain?> getDomain(String domain) async =>
+      parse(await get('/domains/$domain'), _VtDomain.fromJson);
 
-  Future<Resolutions?> getDomainResolutions(String domain) async => parse(
-      await get('/domains/$domain/resolutions'), Resolutions.fromJson);
+  Future<_Resolutions?> getDomainResolutions(String domain) async => parse(
+      await get('/domains/$domain/resolutions'), _Resolutions.fromJson);
 
   @override
-  Future<Whois?> getWhois(String entity) async {
-    final kind = isIp(entity) ? 'ip_addresses' : 'domains';
+  Future<_Whois?> getWhois(String entity) async {
+    final kind = _isIp(entity) ? 'ip_addresses' : 'domains';
     return parse(await get('/$kind/$entity/historical_whois'),
-        Whois.fromVirustotal);
+        _Whois.fromVirustotal);
   }
 }
 
-class Ip2WhoisClient extends BaseClient implements WhoisClient {
+class _Ip2WhoisClient extends _BaseClient implements _WhoisClient {
   final String apiKey;
-  Ip2WhoisClient(this.apiKey, super.http_, super.errors);
+  _Ip2WhoisClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'IP2Whois';
@@ -162,14 +150,14 @@ class Ip2WhoisClient extends BaseClient implements WhoisClient {
   String get baseUrl => 'https://api.ip2whois.com/v2';
 
   @override
-  Future<Whois?> getWhois(String entity) async => parse(
+  Future<_Whois?> getWhois(String entity) async => parse(
       await get('/',
-          params: {'key': apiKey, 'domain': refang(entity)},
+          params: {'key': apiKey, 'domain': _refang(entity)},
           // Let a 404 or invalid domain pass (empty whois)
           tolerate: (r) =>
               r.statusCode == 404 ||
               (r.statusCode == 400 && _errorCode(r) == 10007)),
-      Whois.fromIp2Whois);
+      _Whois.fromIp2Whois);
 
   static int? _errorCode(http.Response resp) {
     try {
@@ -182,8 +170,9 @@ class Ip2WhoisClient extends BaseClient implements WhoisClient {
   }
 }
 
-class IpWhoisClient extends BaseClient implements IpEnricherClient<IpGeoAsn> {
-  IpWhoisClient(super.http_, super.errors);
+class _IpWhoisClient extends _BaseClient
+    implements _IpEnricherClient<_IpGeoAsn> {
+  _IpWhoisClient(super.http_, super.errors);
 
   @override
   String get name => 'IPWhois';
@@ -191,19 +180,20 @@ class IpWhoisClient extends BaseClient implements IpEnricherClient<IpGeoAsn> {
   String get baseUrl => 'https://ipwho.is';
 
   @override
-  Future<Map<String, IpGeoAsn>> enrichIps(List<String> ips) async {
-    final result = <String, IpGeoAsn>{};
+  Future<Map<String, _IpGeoAsn>> enrichIps(List<String> ips) async {
+    final result = <String, _IpGeoAsn>{};
     for (final ip in ips) {
       final data = await get('/$ip');
       if (data?['success'] != true) continue;
-      if (parse(data, IpGeoAsn.fromIpWhois) case final m?) result[m.ip] = m;
+      if (parse(data, _IpGeoAsn.fromIpWhois) case final m?) result[m.ip] = m;
     }
     return result;
   }
 }
 
-class IpInfoClient extends BaseClient implements IpEnricherClient<IpGeoAsn> {
-  IpInfoClient(super.http_, super.errors);
+class _IpInfoClient extends _BaseClient
+    implements _IpEnricherClient<_IpGeoAsn> {
+  _IpInfoClient(super.http_, super.errors);
 
   @override
   String get name => 'IPinfo';
@@ -211,21 +201,21 @@ class IpInfoClient extends BaseClient implements IpEnricherClient<IpGeoAsn> {
   String get baseUrl => 'https://ipinfo.io';
 
   @override
-  Future<Map<String, IpGeoAsn>> enrichIps(List<String> ips) async {
-    final result = <String, IpGeoAsn>{};
+  Future<Map<String, _IpGeoAsn>> enrichIps(List<String> ips) async {
+    final result = <String, _IpGeoAsn>{};
     for (final ip in ips) {
       final data = await get('/$ip/json');
       if (data == null || data.isEmpty) continue;
-      if (parse(data, IpGeoAsn.fromIpInfo) case final m?) result[m.ip] = m;
+      if (parse(data, _IpGeoAsn.fromIpInfo) case final m?) result[m.ip] = m;
     }
     return result;
   }
 }
 
-class Ip2LocationClient extends BaseClient
-    implements IpEnricherClient<IpGeoAsn> {
+class _Ip2LocationClient extends _BaseClient
+    implements _IpEnricherClient<_IpGeoAsn> {
   final String apiKey;
-  Ip2LocationClient(this.apiKey, super.http_, super.errors);
+  _Ip2LocationClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'IP2Location';
@@ -233,12 +223,12 @@ class Ip2LocationClient extends BaseClient
   String get baseUrl => 'https://api.ip2location.io';
 
   @override
-  Future<Map<String, IpGeoAsn>> enrichIps(List<String> ips) async {
-    final result = <String, IpGeoAsn>{};
+  Future<Map<String, _IpGeoAsn>> enrichIps(List<String> ips) async {
+    final result = <String, _IpGeoAsn>{};
     for (final ip in ips) {
       final data =
           await get('/', params: {'key': apiKey, 'ip': ip, 'format': 'json'});
-      if (parse(data, IpGeoAsn.fromIp2Location) case final m?) {
+      if (parse(data, _IpGeoAsn.fromIp2Location) case final m?) {
         result[m.ip] = m;
       }
     }
@@ -246,9 +236,10 @@ class Ip2LocationClient extends BaseClient
   }
 }
 
-class ShodanClient extends BaseClient implements IpEnricherClient<ShodanIp> {
+class _ShodanClient extends _BaseClient
+    implements _IpEnricherClient<_ShodanIp> {
   final String apiKey;
-  ShodanClient(this.apiKey, super.http_, super.errors);
+  _ShodanClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'Shodan';
@@ -256,23 +247,23 @@ class ShodanClient extends BaseClient implements IpEnricherClient<ShodanIp> {
   String get baseUrl => 'https://api.shodan.io/shodan';
 
   @override
-  Future<Map<String, ShodanIp>> enrichIps(List<String> ips) async {
-    final result = <String, ShodanIp>{};
+  Future<Map<String, _ShodanIp>> enrichIps(List<String> ips) async {
+    final result = <String, _ShodanIp>{};
     for (final ip in ips) {
       // 404 means the IP is invalid or not in Shodan
       final data = await get('/host/$ip',
           params: {'key': apiKey}, tolerate: (r) => r.statusCode == 404);
       if (data == null || data.isEmpty) continue;
-      if (parse(data, ShodanIp.fromJson) case final m?) result[m.ipStr] = m;
+      if (parse(data, _ShodanIp.fromJson) case final m?) result[m.ipStr] = m;
     }
     return result;
   }
 }
 
-class GreynoiseClient extends BaseClient
-    implements IpEnricherClient<GreynoiseIp> {
+class _GreynoiseClient extends _BaseClient
+    implements _IpEnricherClient<_GreynoiseIp> {
   final String apiKey;
-  GreynoiseClient(this.apiKey, super.http_, super.errors);
+  _GreynoiseClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'Greynoise';
@@ -280,22 +271,22 @@ class GreynoiseClient extends BaseClient
   String get baseUrl => 'https://api.greynoise.io/v3/community';
 
   @override
-  Future<Map<String, GreynoiseIp>> enrichIps(List<String> ips) async {
-    final result = <String, GreynoiseIp>{};
+  Future<Map<String, _GreynoiseIp>> enrichIps(List<String> ips) async {
+    final result = <String, _GreynoiseIp>{};
     for (final ip in ips) {
       final data = await get('/$ip',
           headers: {'key': apiKey}, tolerate: (r) => r.statusCode == 404);
       if (data == null || data.isEmpty) continue;
-      if (parse(data, GreynoiseIp.fromJson) case final m?) result[m.ip] = m;
+      if (parse(data, _GreynoiseIp.fromJson) case final m?) result[m.ip] = m;
     }
     return result;
   }
 }
 
-class AbuseIpDbClient extends BaseClient
-    implements IpEnricherClient<AbuseIpDb> {
+class _AbuseIpDbClient extends _BaseClient
+    implements _IpEnricherClient<_AbuseIpDb> {
   final String apiKey;
-  AbuseIpDbClient(this.apiKey, super.http_, super.errors);
+  _AbuseIpDbClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'AbuseIPDB';
@@ -303,23 +294,24 @@ class AbuseIpDbClient extends BaseClient
   String get baseUrl => 'https://api.abuseipdb.com/api/v2';
 
   @override
-  Future<Map<String, AbuseIpDb>> enrichIps(List<String> ips) async {
-    final result = <String, AbuseIpDb>{};
+  Future<Map<String, _AbuseIpDb>> enrichIps(List<String> ips) async {
+    final result = <String, _AbuseIpDb>{};
     for (final ip in ips) {
       final resp = await get('/check',
           params: {'ipAddress': ip, 'maxAgeInDays': '90'},
           headers: {'key': apiKey, 'Accept': 'application/json'});
       final m = parse(
-          resp, (j) => AbuseIpDb.fromJson(reqMap(j, 'data', 'AbuseIpDb')));
+          resp, (j) => _AbuseIpDb.fromJson(_reqMap(j, 'data', 'AbuseIpDb')));
       if (m != null) result[m.ipAddress] = m;
     }
     return result;
   }
 }
 
-class UrlHausClient extends BaseClient implements IpEnricherClient<UrlHaus> {
+class _UrlHausClient extends _BaseClient
+    implements _IpEnricherClient<_UrlHaus> {
   final String apiKey;
-  UrlHausClient(this.apiKey, super.http_, super.errors);
+  _UrlHausClient(this.apiKey, super.http_, super.errors);
 
   @override
   String get name => 'URLhaus';
@@ -327,20 +319,20 @@ class UrlHausClient extends BaseClient implements IpEnricherClient<UrlHaus> {
   String get baseUrl => 'https://urlhaus-api.abuse.ch/v1';
 
   /// Same lookup for domains and IPs.
-  Future<Map<String, UrlHaus>> enrich(List<String> entities) async {
-    final result = <String, UrlHaus>{};
+  Future<Map<String, _UrlHaus>> enrich(List<String> entities) async {
+    final result = <String, _UrlHaus>{};
     for (final entity in entities) {
       final data = await post('/host',
           data: {'host': entity}, headers: {'Auth-Key': apiKey});
-      final m = parse(data, UrlHaus.fromJson);
+      final m = parse(data, _UrlHaus.fromJson);
       if (m?.host case final host?) result[host] = m!;
     }
     return result;
   }
 
-  Future<Map<String, UrlHaus>> enrichDomains(List<String> domains) =>
+  Future<Map<String, _UrlHaus>> enrichDomains(List<String> domains) =>
       enrich(domains);
 
   @override
-  Future<Map<String, UrlHaus>> enrichIps(List<String> ips) => enrich(ips);
+  Future<Map<String, _UrlHaus>> enrichIps(List<String> ips) => enrich(ips);
 }

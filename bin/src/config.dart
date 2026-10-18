@@ -1,29 +1,23 @@
-import 'dart:io';
+part of 'lookup.dart';
 
-import 'package:http/http.dart' as http;
+const _abuseIpDbApiKeyVar = 'ABUSEIPDB_API_KEY';
+const _greynoiseApiKeyVar = 'GREYNOISE_API_KEY';
+const _ip2LocationApiKeyVar = 'IP2LOCATION_API_KEY';
+const _ip2WhoisApiKeyVar = 'IP2WHOIS_API_KEY';
+const _shodanApiKeyVar = 'SHODAN_API_KEY';
+const _urlHausApiKeyVar = 'URLHAUS_API_KEY';
+const _vtApiKeyVar = 'VT_API_KEY';
+const _wtfisDefaultsVar = 'WTFIS_DEFAULTS';
+const _geolocationServiceVar = 'GEOLOCATION_SERVICE';
 
-import 'clients.dart';
-import 'lookup_result.dart';
-import 'models/ip_enrichment.dart';
-
-const abuseIpDbApiKeyVar = 'ABUSEIPDB_API_KEY';
-const greynoiseApiKeyVar = 'GREYNOISE_API_KEY';
-const ip2LocationApiKeyVar = 'IP2LOCATION_API_KEY';
-const ip2WhoisApiKeyVar = 'IP2WHOIS_API_KEY';
-const shodanApiKeyVar = 'SHODAN_API_KEY';
-const urlHausApiKeyVar = 'URLHAUS_API_KEY';
-const vtApiKeyVar = 'VT_API_KEY';
-const wtfisDefaultsVar = 'WTFIS_DEFAULTS';
-const geolocationServiceVar = 'GEOLOCATION_SERVICE';
-
-const geolocationServices = ['ip2location', 'ipinfo', 'ipwhois'];
-const defaultGeolocationService = 'ipwhois';
-const defaultMaxResolutions = 3;
+const _geolocationServices = ['ip2location', 'ipinfo', 'ipwhois'];
+const _defaultGeolocationService = 'ipwhois';
+const _defaultMaxResolutions = 3;
 
 /// Lookup configuration (port of `wtfis/config.py`).
 ///
 /// API keys are optional; every source without a key is skipped.
-class WtfisConfig {
+class _WtfisConfig {
   final String vtApiKey;
   final String ip2WhoisApiKey;
   final String ip2LocationApiKey;
@@ -32,7 +26,7 @@ class WtfisConfig {
   final String abuseIpDbApiKey;
   final String urlHausApiKey;
 
-  /// One of [geolocationServices].
+  /// One of [_geolocationServices].
   final String geolocationService;
 
   final bool all;
@@ -44,7 +38,7 @@ class WtfisConfig {
   /// Maximum number of resolutions to enrich (0..10).
   final int maxResolutions;
 
-  WtfisConfig({
+  _WtfisConfig({
     this.vtApiKey = '',
     this.ip2WhoisApiKey = '',
     this.ip2LocationApiKey = '',
@@ -52,37 +46,37 @@ class WtfisConfig {
     this.greynoiseApiKey = '',
     this.abuseIpDbApiKey = '',
     this.urlHausApiKey = '',
-    this.geolocationService = defaultGeolocationService,
+    this.geolocationService = _defaultGeolocationService,
     this.all = false,
     this.useShodan = false,
     this.useGreynoise = false,
     this.useAbuseIpDb = false,
     this.useUrlHaus = false,
-    this.maxResolutions = defaultMaxResolutions,
+    this.maxResolutions = _defaultMaxResolutions,
   });
 
   /// Checks the configuration. Instead of throwing, all problems are
-  /// returned as [LookupError]s of kind [LookupErrorKind.config].
-  List<LookupError> validate() => [
+  /// returned as [_LookupError]s of kind [_LookupErrorKind.config].
+  List<_LookupError> validate() => [
         if (maxResolutions < 0 || maxResolutions > 10)
           _configError('maxResolutions: Maximum value is 10 '
               '(got $maxResolutions)'),
-        if (!geolocationServices.contains(geolocationService))
+        if (!_geolocationServices.contains(geolocationService))
           _configError('geolocationService: Valid services are: '
-              '${geolocationServices.join(', ')} (got $geolocationService)'),
+              '${_geolocationServices.join(', ')} (got $geolocationService)'),
         if (geolocationService == 'ip2location' && ip2LocationApiKey.isEmpty)
-          _configError('$ip2LocationApiKeyVar is not set'),
+          _configError('$_ip2LocationApiKeyVar is not set'),
       ];
 
-  static LookupError _configError(String message) =>
-      LookupError(LookupErrorKind.config, 'config', message);
+  static _LookupError _configError(String message) =>
+      _LookupError(_LookupErrorKind.config, 'config', message);
 
   /// Builds the config from environment variables and `~/.env.wtfis`
   /// (variables already set in the environment take precedence).
   ///
   /// Boolean options set explicitly here are toggled by `WTFIS_DEFAULTS`,
   /// exactly like the command line flags in the original tool.
-  factory WtfisConfig.fromEnvironment({
+  factory _WtfisConfig.fromEnvironment({
     Map<String, String>? environment,
     String? envFile,
     bool all = false,
@@ -90,7 +84,7 @@ class WtfisConfig {
     bool useGreynoise = false,
     bool useAbuseIpDb = false,
     bool useUrlHaus = false,
-    int maxResolutions = defaultMaxResolutions,
+    int maxResolutions = _defaultMaxResolutions,
     String? geolocationService,
   }) {
     final env = {
@@ -98,7 +92,7 @@ class WtfisConfig {
       ...(environment ?? Platform.environment),
     };
 
-    for (final option in (env[wtfisDefaultsVar] ?? '').split(' ')) {
+    for (final option in (env[_wtfisDefaultsVar] ?? '').split(' ')) {
       switch (option) {
         case '-A' || '--all':
           all = !all;
@@ -113,17 +107,17 @@ class WtfisConfig {
       }
     }
 
-    return WtfisConfig(
-      vtApiKey: env[vtApiKeyVar] ?? '',
-      ip2WhoisApiKey: env[ip2WhoisApiKeyVar] ?? '',
-      ip2LocationApiKey: env[ip2LocationApiKeyVar] ?? '',
-      shodanApiKey: env[shodanApiKeyVar] ?? '',
-      greynoiseApiKey: env[greynoiseApiKeyVar] ?? '',
-      abuseIpDbApiKey: env[abuseIpDbApiKeyVar] ?? '',
-      urlHausApiKey: env[urlHausApiKeyVar] ?? '',
+    return _WtfisConfig(
+      vtApiKey: env[_vtApiKeyVar] ?? '',
+      ip2WhoisApiKey: env[_ip2WhoisApiKeyVar] ?? '',
+      ip2LocationApiKey: env[_ip2LocationApiKeyVar] ?? '',
+      shodanApiKey: env[_shodanApiKeyVar] ?? '',
+      greynoiseApiKey: env[_greynoiseApiKeyVar] ?? '',
+      abuseIpDbApiKey: env[_abuseIpDbApiKeyVar] ?? '',
+      urlHausApiKey: env[_urlHausApiKeyVar] ?? '',
       geolocationService: geolocationService ??
-          env[geolocationServiceVar] ??
-          defaultGeolocationService,
+          env[_geolocationServiceVar] ??
+          _defaultGeolocationService,
       all: all,
       useShodan: useShodan,
       useGreynoise: useGreynoise,
@@ -141,49 +135,49 @@ class WtfisConfig {
 
   // Clients
 
-  VTClient? vtClient(http.Client c, List<LookupError> e) =>
-      vtApiKey.isNotEmpty ? VTClient(vtApiKey, c, e) : null;
+  _VTClient? vtClient(http.Client c, List<_LookupError> e) =>
+      vtApiKey.isNotEmpty ? _VTClient(vtApiKey, c, e) : null;
 
-  IpEnricherClient<IpGeoAsn> geoAsnClient(
-          http.Client c, List<LookupError> e) =>
+  _IpEnricherClient<_IpGeoAsn> geoAsnClient(
+          http.Client c, List<_LookupError> e) =>
       switch (geolocationService) {
-        'ip2location' => Ip2LocationClient(ip2LocationApiKey, c, e),
-        'ipinfo' => IpInfoClient(c, e),
-        _ => IpWhoisClient(c, e),
+        'ip2location' => _Ip2LocationClient(ip2LocationApiKey, c, e),
+        'ipinfo' => _IpInfoClient(c, e),
+        _ => _IpWhoisClient(c, e),
       };
 
   /// IP2Whois is preferred for domains; Virustotal is the fallback.
-  WhoisClient? whoisClient(http.Client c, List<LookupError> e) {
+  _WhoisClient? whoisClient(http.Client c, List<_LookupError> e) {
     if (ip2WhoisApiKey.isNotEmpty) {
-      return Ip2WhoisClient(ip2WhoisApiKey, c, e);
+      return _Ip2WhoisClient(ip2WhoisApiKey, c, e);
     }
-    if (vtApiKey.isNotEmpty) return VTClient(vtApiKey, c, e);
+    if (vtApiKey.isNotEmpty) return _VTClient(vtApiKey, c, e);
     return null;
   }
 
-  ShodanClient? shodanClient(http.Client c, List<LookupError> e) =>
+  _ShodanClient? shodanClient(http.Client c, List<_LookupError> e) =>
       (useShodan || all) && shodanApiKey.isNotEmpty
-          ? ShodanClient(shodanApiKey, c, e)
+          ? _ShodanClient(shodanApiKey, c, e)
           : null;
 
-  GreynoiseClient? greynoiseClient(http.Client c, List<LookupError> e) =>
+  _GreynoiseClient? greynoiseClient(http.Client c, List<_LookupError> e) =>
       (useGreynoise || all) && greynoiseApiKey.isNotEmpty
-          ? GreynoiseClient(greynoiseApiKey, c, e)
+          ? _GreynoiseClient(greynoiseApiKey, c, e)
           : null;
 
-  AbuseIpDbClient? abuseIpDbClient(http.Client c, List<LookupError> e) =>
+  _AbuseIpDbClient? abuseIpDbClient(http.Client c, List<_LookupError> e) =>
       (useAbuseIpDb || all) && abuseIpDbApiKey.isNotEmpty
-          ? AbuseIpDbClient(abuseIpDbApiKey, c, e)
+          ? _AbuseIpDbClient(abuseIpDbApiKey, c, e)
           : null;
 
-  UrlHausClient? urlHausClient(http.Client c, List<LookupError> e) =>
+  _UrlHausClient? urlHausClient(http.Client c, List<_LookupError> e) =>
       (useUrlHaus || all) && urlHausApiKey.isNotEmpty
-          ? UrlHausClient(urlHausApiKey, c, e)
+          ? _UrlHausClient(urlHausApiKey, c, e)
           : null;
 }
 
 /// Minimal dotenv parser (`KEY=value`, `#` comments, optional quotes).
-Map<String, String> loadEnvFile(String? path) {
+Map<String, String> _loadEnvFile(String? path) {
   if (path == null) return {};
   final file = File(path);
   if (!file.existsSync()) return {};

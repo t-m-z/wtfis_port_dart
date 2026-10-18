@@ -2,9 +2,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 
-import 'src/config.dart';
 import 'src/lookup.dart';
-import 'src/lookup_result.dart';
 
 /// Exit codes: 0 = no errors, 1 = lookup done but some sources failed
 /// (see `"errors"`), 64 = invalid usage, input or configuration.
@@ -54,25 +52,16 @@ Future<void> main(List<String> arguments) async {
     return;
   }
 
-  LookupResult result;
-  try {
-    final config = WtfisConfig.fromEnvironment(
-      all: args.flag('all'),
-      useShodan: args.flag('use-shodan'),
-      useGreynoise: args.flag('use-greynoise'),
-      useAbuseIpDb: args.flag('use-abuseipdb'),
-      useUrlHaus: args.flag('use-urlhaus'),
-      maxResolutions: maxResolutions,
-      geolocationService: args.option('geolocation-service'),
-    );
-    result = await lookup(args.rest.single, config: config);
-  } on FileSystemException catch (e) {
-    // ~/.env.wtfis exists but cannot be read
-    result = LookupResult(args.rest.single, errors: [
-      LookupError(LookupErrorKind.config, 'config',
-          'Cannot read ${e.path ?? 'env file'}: ${e.message}'),
-    ]);
-  }
+  final result = await lookup(
+    args.rest.single,
+    all: args.flag('all'),
+    useShodan: args.flag('use-shodan'),
+    useGreynoise: args.flag('use-greynoise'),
+    useAbuseIpDb: args.flag('use-abuseipdb'),
+    useUrlHaus: args.flag('use-urlhaus'),
+    maxResolutions: maxResolutions,
+    geolocationService: args.option('geolocation-service'),
+  );
 
   stdout.writeln(result.toJsonString(pretty: args.flag('pretty')));
   for (final e in result.errors) {

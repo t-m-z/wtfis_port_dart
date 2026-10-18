@@ -1,8 +1,7 @@
-import '../utils.dart';
-import 'json.dart';
+part of '../lookup.dart';
 
 /// Normalized WHOIS record from different sources (port of `WhoisBase`).
-class Whois {
+class _Whois {
   final String? source;
   final String? domain;
   final String? registrar;
@@ -22,7 +21,7 @@ class Whois {
   final String? dnssec;
   final String? whoisServer;
 
-  const Whois({
+  const _Whois({
     this.source,
     this.domain,
     this.registrar,
@@ -44,7 +43,7 @@ class Whois {
   });
 
   /// Port of `models/ip2whois.py`.
-  factory Whois.fromIp2Whois(Json json) {
+  factory _Whois.fromIp2Whois(_Json json) {
     const m = 'Ip2Whois';
     final v = Map<String, dynamic>.from(json);
 
@@ -68,36 +67,36 @@ class Whois {
 
     // Convert registrar from object to simply registrar.name
     final registrar = v['registrar'];
-    return Whois(
+    return _Whois(
       source: 'ip2whois',
-      domain: opt<String>(v, 'domain', m) ?? '',
+      domain: _opt<String>(v, 'domain', m) ?? '',
       registrar:
-          registrar is Map ? registrar['name'] as String? : laxStr(registrar),
-      organization: opt<String>(v, 'organization', m),
-      name: opt<String>(v, 'name', m),
-      email: opt<String>(v, 'email', m),
-      phone: opt<String>(v, 'phone', m),
-      street: opt<String>(v, 'street_address', m),
-      city: opt<String>(v, 'city', m),
-      state: opt<String>(v, 'region', m),
-      country: opt<String>(v, 'country', m),
-      postalCode: opt<String>(v, 'zip_code', m),
-      nameServers: listOf<String>(v, 'nameservers', m),
-      dateCreated: opt<String>(v, 'create_date', m),
-      dateChanged: opt<String>(v, 'update_date', m),
-      dateExpires: opt<String>(v, 'expire_date', m),
-      whoisServer: opt<String>(v, 'whois_server', m),
-      dnssec: opt<String>(v, 'dnssec', m),
+          registrar is Map ? registrar['name'] as String? : _laxStr(registrar),
+      organization: _opt<String>(v, 'organization', m),
+      name: _opt<String>(v, 'name', m),
+      email: _opt<String>(v, 'email', m),
+      phone: _opt<String>(v, 'phone', m),
+      street: _opt<String>(v, 'street_address', m),
+      city: _opt<String>(v, 'city', m),
+      state: _opt<String>(v, 'region', m),
+      country: _opt<String>(v, 'country', m),
+      postalCode: _opt<String>(v, 'zip_code', m),
+      nameServers: _listOf<String>(v, 'nameservers', m),
+      dateCreated: _opt<String>(v, 'create_date', m),
+      dateChanged: _opt<String>(v, 'update_date', m),
+      dateExpires: _opt<String>(v, 'expire_date', m),
+      whoisServer: _opt<String>(v, 'whois_server', m),
+      dnssec: _opt<String>(v, 'dnssec', m),
     );
   }
 
   /// Port of `models/virustotal.py::Whois` (historical_whois endpoint;
   /// only the latest record is used).
-  factory Whois.fromVirustotal(Json json) {
+  factory _Whois.fromVirustotal(_Json json) {
     const m = 'VirustotalWhois';
     final data = json['data'];
     if (data is! List || data.isEmpty) {
-      return const Whois(source: 'virustotal', domain: '');
+      return const _Whois(source: 'virustotal', domain: '');
     }
 
     // Flatten
@@ -126,14 +125,14 @@ class Whois {
 
     // Port of the `dedupe_values` validator: "a | b" -> "a"
     String? dedupe(Object? v) {
-      final s = laxStr(v);
+      final s = _laxStr(v);
       return (s != null && s.contains('|')) ? s.split(' | ').first : s;
     }
 
-    final ns = opt<String>(t, 'Name Server', m);
-    return Whois(
+    final ns = _opt<String>(t, 'Name Server', m);
+    return _Whois(
       source: 'virustotal',
-      domain: dedupe((opt<String>(t, 'Domain Name', m) ?? '').toLowerCase()),
+      domain: dedupe((_opt<String>(t, 'Domain Name', m) ?? '').toLowerCase()),
       registrar: dedupe(registrar),
       organization: dedupe(t['Registrant Organization']),
       name: dedupe(name),
@@ -152,7 +151,7 @@ class Whois {
     );
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'source': source,
         'domain': domain,
         'registrar': registrar,
@@ -166,9 +165,9 @@ class Whois {
         'country': country,
         'postal_code': postalCode,
         'name_servers': nameServers,
-        'date_created': standardizeTimestamp(dateCreated),
-        'date_changed': standardizeTimestamp(dateChanged),
-        'date_expires': standardizeTimestamp(dateExpires),
+        'date_created': _standardizeTimestamp(dateCreated),
+        'date_changed': _standardizeTimestamp(dateChanged),
+        'date_expires': _standardizeTimestamp(dateExpires),
         'dnssec': dnssec,
         if (whoisServer != null) 'whois_server': whoisServer,
       };

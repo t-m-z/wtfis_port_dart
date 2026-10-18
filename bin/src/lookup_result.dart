@@ -1,11 +1,7 @@
-import 'dart:convert';
+part of 'lookup.dart';
 
-import 'package:http/http.dart' as http;
-
-import 'models/json.dart';
-
-/// Category of a [LookupError].
-enum LookupErrorKind {
+/// Category of a [_LookupError].
+enum _LookupErrorKind {
   /// Invalid input, e.g. an IP address instead of a domain.
   input,
 
@@ -26,11 +22,11 @@ enum LookupErrorKind {
 }
 
 /// A single error collected during a lookup.
-class LookupError {
+class _LookupError {
   /// Maximum number of characters of a response body kept in [body].
   static const maxBodyLength = 1000;
 
-  final LookupErrorKind kind;
+  final _LookupErrorKind kind;
 
   /// Data source the error belongs to (e.g. `Virustotal`), or `input` /
   /// `config` for errors that are not tied to a source.
@@ -38,7 +34,7 @@ class LookupError {
 
   final String message;
 
-  /// HTTP status code ([LookupErrorKind.http] only).
+  /// HTTP status code ([_LookupErrorKind.http] only).
   final int? statusCode;
 
   /// Requested URL without query parameters, so API keys passed as
@@ -46,10 +42,10 @@ class LookupError {
   final Uri? url;
 
   /// Response body, truncated to [maxBodyLength] characters
-  /// ([LookupErrorKind.http] only). May be an HTML error page.
+  /// ([_LookupErrorKind.http] only). May be an HTML error page.
   final String? body;
 
-  LookupError(
+  _LookupError(
     this.kind,
     this.source,
     this.message, {
@@ -62,11 +58,11 @@ class LookupError {
             : '${body.substring(0, maxBodyLength)}…';
 
   /// Error for a non-2xx HTTP response.
-  factory LookupError.http(String source, http.Response response, Uri url) {
+  factory _LookupError.http(String source, http.Response response, Uri url) {
     final status = response.statusCode;
     final reason = response.reasonPhrase;
-    return LookupError(
-      LookupErrorKind.http,
+    return _LookupError(
+      _LookupErrorKind.http,
       source,
       '$status ${status >= 500 ? 'Server' : 'Client'} Error'
       '${reason == null || reason.isEmpty ? '' : ' ($reason)'}',
@@ -83,9 +79,9 @@ class LookupError {
         path: u.path,
       );
 
-  bool get isHttp => kind == LookupErrorKind.http;
+  bool get isHttp => kind == _LookupErrorKind.http;
 
-  Json toJson() => {
+  _Json toJson() => {
         'source': source,
         'type': kind.name,
         'message': message,
@@ -102,28 +98,28 @@ class LookupError {
 /// Result of a domain lookup: the collected data plus all errors that
 /// occurred. Errors never abort the lookup; sources that failed are `null`
 /// in [data] and listed in [errors].
-class LookupResult {
+class _LookupResult {
   final String entity;
 
   /// Enrichment data (`virustotal`, `urlhaus`, `resolutions`, `whois`), or
   /// `null` if the lookup could not be started (input/config errors).
-  final Json? data;
+  final _Json? data;
 
-  final List<LookupError> errors;
+  final List<_LookupError> errors;
 
-  LookupResult(this.entity, {this.data, List<LookupError>? errors})
+  _LookupResult(this.entity, {this.data, List<_LookupError>? errors})
       : errors = List.unmodifiable(errors ?? const []);
 
   /// `true` if no error occurred.
   bool get ok => errors.isEmpty;
 
   /// Errors caused by HTTP responses.
-  Iterable<LookupError> get httpErrors => errors.where((e) => e.isHttp);
+  Iterable<_LookupError> get httpErrors => errors.where((e) => e.isHttp);
 
   /// `true` if the lookup could not be started at all.
   bool get aborted => data == null;
 
-  Json toJson() => {
+  _Json toJson() => {
         'entity': entity,
         'type': 'domain',
         'ok': ok,

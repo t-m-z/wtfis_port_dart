@@ -1,10 +1,8 @@
-import '../exceptions.dart';
-import '../utils.dart';
-import 'json.dart';
+part of '../lookup.dart';
 
 /// Normalized IP geolocation and ASN data (port of `IpGeoAsnBase` and the
 /// `ipwhois`, `ipinfo` and `ip2location` models).
-class IpGeoAsn {
+class _IpGeoAsn {
   final String source;
   final String ip;
   final String? city;
@@ -19,7 +17,7 @@ class IpGeoAsn {
   final String? isAnycast;
   final String? link;
 
-  const IpGeoAsn({
+  const _IpGeoAsn({
     required this.source,
     required this.ip,
     this.city,
@@ -36,76 +34,76 @@ class IpGeoAsn {
   });
 
   /// https://ipwhois.io/documentation
-  factory IpGeoAsn.fromIpWhois(Json j) {
+  factory _IpGeoAsn.fromIpWhois(_Json j) {
     const m = 'IpWhois';
-    final c = optMap(j, 'connection', m) ?? const {};
-    return IpGeoAsn(
+    final c = _optMap(j, 'connection', m) ?? const {};
+    return _IpGeoAsn(
       source: 'IPWhois',
-      ip: laxStr(req<Object>(j, 'ip', m))!,
-      city: laxStr(j['city']),
-      country: laxStr(j['country']),
-      region: laxStr(j['region']),
-      asn: laxStr(c['asn']),
-      org: laxStr(c['org']),
-      isp: laxStr(c['isp']),
-      domain: laxStr(c['domain']),
-      hostname: laxStr(j['hostname']),
-      isProxy: laxStr(j['is_proxy']),
-      isAnycast: laxStr(j['is_anycast']),
-      link: laxStr(j['link']),
+      ip: _laxStr(_req<Object>(j, 'ip', m))!,
+      city: _laxStr(j['city']),
+      country: _laxStr(j['country']),
+      region: _laxStr(j['region']),
+      asn: _laxStr(c['asn']),
+      org: _laxStr(c['org']),
+      isp: _laxStr(c['isp']),
+      domain: _laxStr(c['domain']),
+      hostname: _laxStr(j['hostname']),
+      isProxy: _laxStr(j['is_proxy']),
+      isAnycast: _laxStr(j['is_anycast']),
+      link: _laxStr(j['link']),
     );
   }
 
   /// https://ipinfo.io/developers
-  factory IpGeoAsn.fromIpInfo(Json j) {
+  factory _IpGeoAsn.fromIpInfo(_Json j) {
     const m = 'IpInfo';
-    final ip = laxStr(req<Object>(j, 'ip', m))!;
+    final ip = _laxStr(_req<Object>(j, 'ip', m))!;
     String? asn;
-    var org = laxStr(j['org']);
+    var org = _laxStr(j['org']);
     // Extract ASN and Org from the org field
     final match = RegExp(r'AS(\d+)\s+(.+)$').firstMatch(org ?? '');
     if (match != null) {
       asn = match.group(1);
       org = match.group(2)!.trim();
     }
-    return IpGeoAsn(
+    return _IpGeoAsn(
       source: 'IPinfo',
       ip: ip,
-      city: laxStr(j['city']),
-      country: laxStr(j['country']),
-      region: laxStr(j['region']),
+      city: _laxStr(j['city']),
+      country: _laxStr(j['country']),
+      region: _laxStr(j['region']),
       asn: asn,
       org: org,
-      isp: laxStr(j['isp']),
-      domain: laxStr(j['domain']),
-      hostname: laxStr(j['hostname']),
-      isProxy: laxStr(j['is_proxy']),
-      isAnycast: laxStr(j['anycast']),
+      isp: _laxStr(j['isp']),
+      domain: _laxStr(j['domain']),
+      hostname: _laxStr(j['hostname']),
+      isProxy: _laxStr(j['is_proxy']),
+      isAnycast: _laxStr(j['anycast']),
       link: 'https://ipinfo.io/$ip',
     );
   }
 
   /// https://www.ip2location.io/ip2location-documentation
-  factory IpGeoAsn.fromIp2Location(Json j) {
+  factory _IpGeoAsn.fromIp2Location(_Json j) {
     const m = 'Ip2Location';
-    return IpGeoAsn(
+    return _IpGeoAsn(
       source: 'IP2Location',
-      ip: laxStr(req<Object>(j, 'ip', m))!,
-      city: laxStr(j['city_name']),
-      region: laxStr(j['region_name']),
-      country: laxStr(j['country_name']),
-      asn: laxStr(j['asn']),
-      org: laxStr(j['as']),
-      isp: laxStr(j['isp']),
-      domain: laxStr(j['domain']),
-      hostname: laxStr(j['hostname']),
-      isProxy: laxStr(j['is_proxy']),
-      isAnycast: laxStr(j['is_anycast']),
-      link: laxStr(j['link']),
+      ip: _laxStr(_req<Object>(j, 'ip', m))!,
+      city: _laxStr(j['city_name']),
+      region: _laxStr(j['region_name']),
+      country: _laxStr(j['country_name']),
+      asn: _laxStr(j['asn']),
+      org: _laxStr(j['as']),
+      isp: _laxStr(j['isp']),
+      domain: _laxStr(j['domain']),
+      hostname: _laxStr(j['hostname']),
+      isProxy: _laxStr(j['is_proxy']),
+      isAnycast: _laxStr(j['is_anycast']),
+      link: _laxStr(j['link']),
     );
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'source': source,
         'ip': ip,
         'city': city,
@@ -122,36 +120,36 @@ class IpGeoAsn {
       };
 }
 
-class PortData {
+class _PortData {
   final int port;
   final String? product;
   final String transport;
 
-  const PortData(this.port, this.product, this.transport);
+  const _PortData(this.port, this.product, this.transport);
 }
 
 /// Port of `ShodanIp`.
-class ShodanIp {
-  final Json _raw;
+class _ShodanIp {
+  final _Json _raw;
   final String ipStr;
-  final List<PortData> data;
+  final List<_PortData> data;
 
-  ShodanIp._(this._raw, this.ipStr, this.data);
+  _ShodanIp._(this._raw, this.ipStr, this.data);
 
-  factory ShodanIp.fromJson(Json j) {
+  factory _ShodanIp.fromJson(_Json j) {
     const m = 'ShodanIp';
     for (final f in const ['country_code', 'country_name', 'last_update']) {
-      req<String>(j, f, m);
+      _req<String>(j, f, m);
     }
     final data = [
-      for (final p in req<List>(j, 'data', m))
-        PortData(
-          req<int>(Map<String, dynamic>.from(p), 'port', m),
+      for (final p in _req<List>(j, 'data', m))
+        _PortData(
+          _req<int>(Map<String, dynamic>.from(p), 'port', m),
           (p as Map)['product'] as String?,
-          req<String>(Map<String, dynamic>.from(p), 'transport', m),
+          _req<String>(Map<String, dynamic>.from(p), 'transport', m),
         ),
     ];
-    return ShodanIp._(j, req<String>(j, 'ip_str', m), data);
+    return _ShodanIp._(j, _req<String>(j, 'ip_str', m), data);
   }
 
   /// Groups open ports by product; ports without product end up in "Other".
@@ -170,9 +168,9 @@ class ShodanIp {
     return result;
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'ip': ipStr,
-        'asn': laxStr(_raw['asn']),
+        'asn': _laxStr(_raw['asn']),
         'org': _raw['org'],
         'isp': _raw['isp'],
         'os': _raw['os'],
@@ -183,13 +181,13 @@ class ShodanIp {
         'ports': _raw['ports'],
         'services': groupPortsByProduct(),
         'tags': _raw['tags'],
-        'last_update': standardizeTimestamp(_raw['last_update']),
+        'last_update': _standardizeTimestamp(_raw['last_update']),
         'link': 'https://www.shodan.io/host/$ipStr',
       };
 }
 
 /// Port of `GreynoiseIp`.
-class GreynoiseIp {
+class _GreynoiseIp {
   final String ip;
   final bool noise;
   final bool riot;
@@ -199,7 +197,7 @@ class GreynoiseIp {
   final String? name;
   final String? lastSeen;
 
-  const GreynoiseIp({
+  const _GreynoiseIp({
     required this.ip,
     required this.noise,
     required this.riot,
@@ -210,21 +208,21 @@ class GreynoiseIp {
     this.lastSeen,
   });
 
-  factory GreynoiseIp.fromJson(Json j) {
+  factory _GreynoiseIp.fromJson(_Json j) {
     const m = 'GreynoiseIp';
-    return GreynoiseIp(
-      ip: req<String>(j, 'ip', m),
-      noise: req<bool>(j, 'noise', m),
-      riot: req<bool>(j, 'riot', m),
-      message: req<String>(j, 'message', m),
-      link: req<String>(j, 'link', m),
-      classification: opt<String>(j, 'classification', m),
-      name: opt<String>(j, 'name', m),
-      lastSeen: opt<String>(j, 'last_seen', m),
+    return _GreynoiseIp(
+      ip: _req<String>(j, 'ip', m),
+      noise: _req<bool>(j, 'noise', m),
+      riot: _req<bool>(j, 'riot', m),
+      message: _req<String>(j, 'message', m),
+      link: _req<String>(j, 'link', m),
+      classification: _opt<String>(j, 'classification', m),
+      name: _opt<String>(j, 'name', m),
+      lastSeen: _opt<String>(j, 'last_seen', m),
     );
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'ip': ip,
         'noise': noise,
         'riot': riot,
@@ -237,25 +235,25 @@ class GreynoiseIp {
 }
 
 /// Port of `AbuseIpDb`.
-class AbuseIpDb {
+class _AbuseIpDb {
   final String ipAddress;
   final int abuseConfidenceScore;
   final String isp;
-  final Json _raw;
+  final _Json _raw;
 
-  AbuseIpDb._(this._raw, this.ipAddress, this.abuseConfidenceScore, this.isp);
+  _AbuseIpDb._(this._raw, this.ipAddress, this.abuseConfidenceScore, this.isp);
 
-  factory AbuseIpDb.fromJson(Json j) {
+  factory _AbuseIpDb.fromJson(_Json j) {
     const m = 'AbuseIpDb';
-    return AbuseIpDb._(
+    return _AbuseIpDb._(
       j,
-      req<String>(j, 'ipAddress', m),
-      req<int>(j, 'abuseConfidenceScore', m),
-      req<String>(j, 'isp', m),
+      _req<String>(j, 'ipAddress', m),
+      _req<int>(j, 'abuseConfidenceScore', m),
+      _req<String>(j, 'isp', m),
     );
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'ip_address': ipAddress,
         'abuse_confidence_score': abuseConfidenceScore,
         'is_public': _raw['isPublic'],
@@ -269,7 +267,7 @@ class AbuseIpDb {
         'is_tor': _raw['isTor'],
         'total_reports': _raw['totalReports'],
         'num_distinct_users': _raw['numDistinctUsers'],
-        'last_reported_at': standardizeTimestamp(_raw['lastReportedAt']),
+        'last_reported_at': _standardizeTimestamp(_raw['lastReportedAt']),
         'link': 'https://www.abuseipdb.com/check/$ipAddress',
       };
 }
@@ -278,10 +276,10 @@ int? _laxInt(Object? v, String field) {
   if (v == null || v == '') return null;
   if (v is int) return v;
   if (v is String && int.tryParse(v) != null) return int.parse(v);
-  throw ModelException('UrlHaus: field "$field" is not an integer');
+  throw _ModelException('UrlHaus: field "$field" is not an integer');
 }
 
-class UrlHausUrl {
+class _UrlHausUrl {
   final String id;
   final String urlhausReference;
   final String url;
@@ -293,7 +291,7 @@ class UrlHausUrl {
   final int? takedownTimeSeconds;
   final List<String> tags;
 
-  const UrlHausUrl({
+  const _UrlHausUrl({
     required this.id,
     required this.urlhausReference,
     required this.url,
@@ -306,28 +304,28 @@ class UrlHausUrl {
     this.tags = const [],
   });
 
-  factory UrlHausUrl.fromJson(Json j) {
+  factory _UrlHausUrl.fromJson(_Json j) {
     const m = 'UrlHausUrl';
-    final larted = laxStr(req<Object>(j, 'larted', m))!.toLowerCase();
+    final larted = _laxStr(_req<Object>(j, 'larted', m))!.toLowerCase();
     if (larted != 'true' && larted != 'false') {
-      throw const ModelException('UrlHausUrl: invalid "larted" value');
+      throw const _ModelException('UrlHausUrl: invalid "larted" value');
     }
-    return UrlHausUrl(
-      id: laxStr(req<Object>(j, 'id', m))!,
-      urlhausReference: req<String>(j, 'urlhaus_reference', m),
-      url: req<String>(j, 'url', m),
-      urlStatus: req<String>(j, 'url_status', m),
-      dateAdded: req<String>(j, 'date_added', m),
-      threat: req<String>(j, 'threat', m),
-      reporter: req<String>(j, 'reporter', m),
+    return _UrlHausUrl(
+      id: _laxStr(_req<Object>(j, 'id', m))!,
+      urlhausReference: _req<String>(j, 'urlhaus_reference', m),
+      url: _req<String>(j, 'url', m),
+      urlStatus: _req<String>(j, 'url_status', m),
+      dateAdded: _req<String>(j, 'date_added', m),
+      threat: _req<String>(j, 'threat', m),
+      reporter: _req<String>(j, 'reporter', m),
       larted: larted == 'true',
       takedownTimeSeconds:
           _laxInt(j['takedown_time_seconds'], 'takedown_time_seconds'),
-      tags: listOf<String>(j, 'tags', m),
+      tags: _listOf<String>(j, 'tags', m),
     );
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'id': id,
         'url': url,
         'url_status': urlStatus,
@@ -342,16 +340,16 @@ class UrlHausUrl {
 }
 
 /// Port of `UrlHaus`.
-class UrlHaus {
+class _UrlHaus {
   final String queryStatus;
   final String? urlhausReference;
   final String? host;
   final String? firstseen;
   final int? urlCount;
   final Map<String, String>? blacklists;
-  final List<UrlHausUrl> urls;
+  final List<_UrlHausUrl> urls;
 
-  const UrlHaus({
+  const _UrlHaus({
     required this.queryStatus,
     this.urlhausReference,
     this.host,
@@ -361,24 +359,24 @@ class UrlHaus {
     this.urls = const [],
   });
 
-  factory UrlHaus.fromJson(Json j) {
+  factory _UrlHaus.fromJson(_Json j) {
     const m = 'UrlHaus';
-    final bl = optMap(j, 'blacklists', m);
-    return UrlHaus(
-      queryStatus: req<String>(j, 'query_status', m),
-      urlhausReference: opt<String>(j, 'urlhaus_reference', m),
-      host: opt<String>(j, 'host', m),
-      firstseen: opt<String>(j, 'firstseen', m),
+    final bl = _optMap(j, 'blacklists', m);
+    return _UrlHaus(
+      queryStatus: _req<String>(j, 'query_status', m),
+      urlhausReference: _opt<String>(j, 'urlhaus_reference', m),
+      host: _opt<String>(j, 'host', m),
+      firstseen: _opt<String>(j, 'firstseen', m),
       urlCount: _laxInt(j['url_count'], 'url_count'),
       blacklists: bl == null
           ? null
           : {
-              'spamhaus_dbl': req<String>(bl, 'spamhaus_dbl', m),
-              'surbl': req<String>(bl, 'surbl', m),
+              'spamhaus_dbl': _req<String>(bl, 'spamhaus_dbl', m),
+              'surbl': _req<String>(bl, 'surbl', m),
             },
       urls: [
-        for (final u in opt<List>(j, 'urls', m) ?? const [])
-          UrlHausUrl.fromJson(Map<String, dynamic>.from(u)),
+        for (final u in _opt<List>(j, 'urls', m) ?? const [])
+          _UrlHausUrl.fromJson(Map<String, dynamic>.from(u)),
       ],
     );
   }
@@ -387,7 +385,7 @@ class UrlHaus {
 
   List<String> get tags => ({for (final u in urls) ...u.tags}.toList()..sort());
 
-  Json toJson() => {
+  _Json toJson() => {
         'host': host,
         'query_status': queryStatus,
         'firstseen': firstseen,

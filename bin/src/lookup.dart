@@ -1,74 +1,110 @@
+// Dart port of wtfis - passive hostname, domain and IP lookup tool.
+//
+// The only name visible outside this file and its parts is [lookup].
+// Everything else is private (`_`); privacy in Dart is per library, so the
+// parts below share these names with each other.
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
 
-import 'config.dart';
-import 'domain_handler.dart';
-import 'lookup_result.dart';
-import 'utils.dart';
+part 'clients.dart';
+part 'config.dart';
+part 'domain_handler.dart';
+part 'exceptions.dart';
+part 'lookup_result.dart';
+part 'models/ip_enrichment.dart';
+part 'models/json.dart';
+part 'models/virustotal.dart';
+part 'models/whois.dart';
+part 'utils.dart';
 
 /// Looks up [domain] (domain or FQDN, defanged input like `example[.]com` is
 /// accepted) at all configured sources.
 ///
-/// * [config] defaults to [WtfisConfig.fromEnvironment], i.e. API keys are
-///   read from the environment and `~/.env.wtfis`.
+/// API keys and `WTFIS_DEFAULTS` are read from [environment] (default: the
+/// process environment) and [envFile] (default: `~/.env.wtfis`); variables
+/// in [environment] take precedence. The flags correspond to the command
+/// line options and are toggled by `WTFIS_DEFAULTS` like in the original:
+///
+/// * [all], [useShodan], [useGreynoise], [useAbuseIpDb], [useUrlHaus]
+/// * [maxResolutions] (0..10) - number of resolutions to enrich
+/// * [geolocationService] - `ip2location`, `ipinfo` or `ipwhois` (default)
 /// * [httpClient] can be injected (e.g. for tests); otherwise a client is
 ///   created and closed internally.
 ///
 /// Never throws. Every problem - invalid input, invalid configuration, HTTP
 /// errors (status code, URL and response body), network errors and API data
-/// that does not match the expected model - is collected in
-/// [LookupResult.errors]. Sources that failed are `null` in the result, all
-/// others are filled as usual.
-Future<LookupResult> lookup(
+/// that does not match the expected model - is collected in the result's
+/// `errors`. Sources that failed are `null` in the result, all others are
+/// filled as usual.
+///
+/// The result offers `entity`, `data`, `errors`, `ok`, `aborted`,
+/// `httpErrors`, `toJson()` and `toJsonString(pretty: ...)`. Each error
+/// offers `kind`, `source`, `message`, `statusCode`, `url`, `body` and
+/// `toJson()`. The result type itself is private on purpose; it is used
+/// through type inference.
+// ignore: library_private_types_in_public_api
+Future<_LookupResult> lookup(
   String domain, {
-  WtfisConfig? config,
+  bool all = false,
+  bool useShodan = false,
+  bool useGreynoise = false,
+  bool useAbuseIpDb = false,
+  bool useUrlHaus = false,
+  int maxResolutions = _defaultMaxResolutions,
+  String? geolocationService,
+  Map<String, String>? environment,
+  String? envFile,
   http.Client? httpClient,
 }) async {
-  final entity = refang(domain).trim();
+  final entity = _refang(domain).trim();
 
-  if (entity.isEmpty || isIp(entity)) {
-    return LookupResult(entity, errors: [
-      LookupError(LookupErrorKind.input, 'input',
+  if (entity.isEmpty || _isIp(entity)) {
+    return _LookupResult(entity, errors: [
+      _LookupError(_LookupErrorKind.input, 'input',
           'Expected a domain or FQDN (got "$domain")'),
     ]);
   }
 
-  final WtfisConfig cfg;
+  final _WtfisConfig cfg;
   try {
-    cfg = config ?? WtfisConfig.fromEnvironment();
+    cfg = _WtfisConfig.fromEnvironment(
+      environment: environment,
+      envFile: envFile,
+      all: all,
+      useShodan: useShodan,
+      useGreynoise: useGreynoise,
+      useAbuseIpDb: useAbuseIpDb,
+      useUrlHaus: useUrlHaus,
+      maxResolutions: maxResolutions,
+      geolocationService: geolocationService,
+    );
   } on Object catch (e) {
     // e.g. unreadable ~/.env.wtfis
-    return LookupResult(entity, errors: [
-      LookupError(LookupErrorKind.config, 'config', e.toString()),
+    return _LookupResult(entity, errors: [
+      _LookupError(_LookupErrorKind.config, 'config', e.toString()),
     ]);
   }
   final configErrors = cfg.validate();
   if (configErrors.isNotEmpty) {
-    return LookupResult(entity, errors: configErrors);
+    return _LookupResult(entity, errors: configErrors);
   }
 
-  final errors = <LookupError>[];
+  final errors = <_LookupError>[];
   final client = httpClient ?? http.Client();
-  final handler = DomainHandler(entity, cfg, client, errors);
+  final handler = _DomainHandler(entity, cfg, client, errors);
   try {
     await handler.fetchData();
   } on Object catch (e) {
     // Safety net: the clients collect their errors themselves, so this only
     // catches programming errors. The data fetched so far is kept.
-    errors.add(LookupError(LookupErrorKind.internal, 'wtfis', e.toString()));
+    errors.add(
+        _LookupError(_LookupErrorKind.internal, 'wtfis', e.toString()));
   } finally {
     if (httpClient == null) client.close();
   }
-  return LookupResult(entity, data: handler.toJson(), errors: errors);
+  return _LookupResult(entity, data: handler.toJson(), errors: errors);
 }
-
-/// Like [lookup], but returns the result directly as JSON string
-/// (indented if [pretty] is set). Never throws; errors are listed under
-/// `"errors"`.
-Future<String> lookupDomain(
-  String domain, {
-  WtfisConfig? config,
-  http.Client? httpClient,
-  bool pretty = false,
-}) async =>
-    (await lookup(domain, config: config, httpClient: httpClient))
-        .toJsonString(pretty: pretty);

@@ -1,14 +1,12 @@
-import 'dart:io' show InternetAddress, InternetAddressType;
-
-import 'exceptions.dart';
+part of 'lookup.dart';
 
 /// Strip `[]`s out of text (e.g. `example[.]com` -> `example.com`).
-String refang(String text) => text.replaceAll('[', '').replaceAll(']', '');
+String _refang(String text) => text.replaceAll('[', '').replaceAll(']', '');
 
 /// Whether [text] is a globally routable IPv4/IPv6 address
 /// (mirrors Python's `ipaddress.ip_address(...).is_global`).
-bool isIp(String text) {
-  final addr = InternetAddress.tryParse(refang(text));
+bool _isIp(String text) {
+  final addr = InternetAddress.tryParse(_refang(text));
   if (addr == null) return false;
   final b = addr.rawAddress;
   if (addr.type == InternetAddressType.IPv4) {
@@ -52,12 +50,12 @@ bool isIp(String text) {
 }
 
 /// Lazy conversion to string (port of the pydantic `LaxStr` validator).
-String? laxStr(Object? v) {
+String? _laxStr(Object? v) {
   if (v == null) return null;
   if (v is String) return v;
   if (v is num) return v.toString();
   if (v is bool) return v ? 'True' : 'False';
-  throw const ModelException('Cannot be cast to string');
+  throw const _ModelException('Cannot be cast to string');
 }
 
 String _pad(int n, [int width = 2]) => n.toString().padLeft(width, '0');
@@ -75,7 +73,7 @@ final _compactOffset = RegExp(r'([+-]\d{2})(\d{2})$');
 /// Convert any timestamp (epoch int / epoch string / ISO-ish string) to the
 /// standard format `YYYY-MM-DDTHH:MM:SSZ` (port of `utils.Timestamp`).
 /// Returns the input unchanged if it cannot be converted (fail open).
-String? standardizeTimestamp(Object? ts) {
+String? _standardizeTimestamp(Object? ts) {
   if (ts == null) return null;
   final s = ts.toString();
   if (_stdUtc.hasMatch(s)) return s;

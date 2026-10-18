@@ -3,12 +3,21 @@
 Dart-Port von [wtfis](https://github.com/t-m-z/wtfis) (Original: [pirxthepilot/wtfis](https://github.com/pirxthepilot/wtfis)),
 einem Tool für passive Domain-/Hostname-Lookups.
 
-Der Port ist eine reine Kommandozeilen-Anwendung – keine Library, keine `export`-Anweisungen.
-Kern ist **eine Funktion, die eine Domain entgegennimmt und das Ergebnis als JSON-String liefert**:
-`lookupDomain()` in [`bin/src/lookup.dart`](bin/src/lookup.dart). Daneben liefert `lookup()` dasselbe
-Ergebnis als Objekt der Ausgabeklasse `LookupResult` ([`bin/src/lookup_result.dart`](bin/src/lookup_result.dart)).
+Der Port ist eine reine Kommandozeilen-Anwendung – keine `library`-Direktive, keine `export`-Anweisungen.
+**Nach außen sichtbar ist nur eine Funktion: `lookup()`** in [`bin/src/lookup.dart`](bin/src/lookup.dart).
+Sie nimmt eine Domain entgegen und liefert ein Ergebnisobjekt, das sich mit `toJsonString()` als JSON ausgeben lässt.
 
-Da Netzwerkzugriffe in Dart asynchron sind, liefern beide Funktionen ein `Future`.
+```dart
+import 'src/lookup.dart'; // aus bin/ heraus
+
+Future<void> main() async {
+  final result = await lookup('gist.github.com', useShodan: true);
+  print(result.toJsonString(pretty: true));
+  if (!result.ok) print('${result.errors.length} Fehler');
+}
+```
+
+Da Netzwerkzugriffe in Dart asynchron sind, liefert `lookup()` ein `Future`.
 
 **Es werden keine Exceptions geworfen.** Alle Fehler – ungültige Eingabe, ungültige Konfiguration,
 HTTP-Fehler, Netzwerkfehler und API-Daten, die nicht zum erwarteten Modell passen – werden gesammelt
@@ -17,57 +26,62 @@ werden trotzdem abgefragt.
 
 ## Aufbau
 
+`bin/src/lookup.dart` enthält alle Imports, die `part`-Direktiven und `lookup()`. Alle übrigen Dateien
+beginnen mit `part of` und gehören damit zur selben Bibliothek. Dart regelt Sichtbarkeit pro Bibliothek:
+Alle Klassen, Funktionen und Konstanten außer `lookup()` tragen ein `_`-Präfix. Sie sind in allen Teilen
+nutzbar, von außen aber unsichtbar – auch für `bin/wtfis.dart` und die Tests.
+
 ```
 bin/
-  wtfis.dart            # Einstiegspunkt (CLI)
+  wtfis.dart            # Einstiegspunkt (CLI), importiert nur src/lookup.dart
   src/
-    lookup.dart         # lookup(), lookupDomain()
-    lookup_result.dart  # Ausgabeklassen LookupResult, LookupError
-    domain_handler.dart # Ablauf des Domain-Lookups
-    clients.dart        # API-Clients
-    config.dart         # WtfisConfig, ~/.env.wtfis
-    exceptions.dart     # ModelException (nur intern beim Parsen)
-    utils.dart
-    models/             # Datenmodelle der APIs
+    lookup.dart         # Imports, part-Direktiven, lookup()
+    lookup_result.dart  # part of: _LookupResult, _LookupError (Ausgabeklassen)
+    domain_handler.dart # part of: Ablauf des Domain-Lookups
+    clients.dart        # part of: API-Clients
+    config.dart         # part of: Konfiguration, ~/.env.wtfis
+    exceptions.dart     # part of: _ModelException (nur intern beim Parsen)
+    utils.dart          # part of
+    models/             # part of '../lookup.dart': Datenmodelle der APIs
 test/
-  wtfis_test.dart       # importiert die Dateien direkt aus bin/src/
+  wtfis_test.dart       # testet ausschließlich über lookup()
 ```
 
-Jede Datei importiert die benötigten Dateien direkt über relative Pfade.
-
-## Signaturen
+## Signatur
 
 ```dart
-Future<LookupResult> lookup(
+Future<_LookupResult> lookup(
   String domain, {
-  WtfisConfig? config,      // Standard: WtfisConfig.fromEnvironment()
-  http.Client? httpClient,  // optional, z. B. für Tests
-});
-
-Future<String> lookupDomain(
-  String domain, {
-  WtfisConfig? config,
-  http.Client? httpClient,
-  bool pretty = false,      // eingerückte Ausgabe
+  bool all = false,                  // -A
+  bool useShodan = false,            // -s
+  bool useGreynoise = false,         // -g
+  bool useAbuseIpDb = false,         // -a
+  bool useUrlHaus = false,           // -u
+  int maxResolutions = 3,            // -m, 0..10
+  String? geolocationService,        // ip2location | ipinfo | ipwhois (Standard)
+  Map<String, String>? environment,  // Standard: Prozess-Umgebung
+  String? envFile,                   // Standard: ~/.env.wtfis
+  http.Client? httpClient,           // optional, z. B. für Tests
 });
 ```
 
 * Defangte Eingaben wie `example[.]com` werden akzeptiert.
 * IP-Adressen werden mit einem Fehler vom Typ `input` abgelehnt (dieser Port deckt nur Domains ab).
+* Der Ergebnistyp ist privat. Man kann ihn nicht beim Namen nennen, aber über `final`/`var` normal verwenden.
 
-## Ausgabeklasse `LookupResult`
+## Ergebnisobjekt
 
 | Member | Bedeutung |
 |---|---|
 | `entity` | normalisierte Domain |
 | `data` | gesammelte Daten (`virustotal`, `urlhaus`, `resolutions`, `whois`), `null` bei Abbruch |
-| `errors` | Liste von `LookupError` |
+| `errors` | Liste der Fehler |
 | `ok` | `true`, wenn kein Fehler aufgetreten ist |
 | `aborted` | `true`, wenn der Lookup wegen Eingabe-/Konfigurationsfehler gar nicht lief |
 | `httpErrors` | nur die HTTP-Fehler |
 | `toJson()` / `toJsonString(pretty: …)` | Ausgabe als Map bzw. JSON |
 
-Ein `LookupError` hat die Felder `kind` (`input`, `config`, `http`, `network`, `model`, `internal`),
+Ein Fehler hat die Felder `kind` (`input`, `config`, `http`, `network`, `model`, `internal`),
 `source` (z. B. `Virustotal`), `message` und – bei HTTP-Fehlern – `statusCode`, `url` und `body`.
 `body` enthält die Antwort des Servers (z. B. eine HTML-Fehlerseite), gekürzt auf 1000 Zeichen.
 Aus `url` werden Query-Parameter entfernt, damit API-Keys nicht in der Ausgabe landen.
@@ -92,13 +106,14 @@ Wie im Original werden API-Keys aus Umgebungsvariablen bzw. `~/.env.wtfis` geles
 
 `WTFIS_DEFAULTS` (z. B. `-s -u`) schaltet die entsprechenden Optionen wie im Original um.
 
-Die Konfiguration kann auch direkt übergeben werden:
+Statt über die Umgebung können API-Keys auch über `environment` übergeben werden:
 
 ```dart
-// innerhalb von bin/ bzw. test/
-final json = await lookupDomain(
+final result = await lookup(
   'example.com',
-  config: WtfisConfig(vtApiKey: '...', urlHausApiKey: '...', all: true, maxResolutions: 5),
+  environment: {'VT_API_KEY': '...', 'URLHAUS_API_KEY': '...'},
+  all: true,
+  maxResolutions: 5,
 );
 ```
 
@@ -173,6 +188,7 @@ dart test
 ```
 
 Die Tests verwenden die Fixture-Daten des Originalprojekts (`test/test_data`) und einen gemockten HTTP-Client.
+Sie greifen nur auf `lookup()` zu; Modelle und Hilfsfunktionen werden über dessen Ergebnis geprüft.
 
 ## Unterschiede zum Original
 

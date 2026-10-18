@@ -1,40 +1,40 @@
-import '../exceptions.dart';
+part of '../lookup.dart';
 
-typedef Json = Map<String, dynamic>;
+typedef _Json = Map<String, dynamic>;
 
 /// Helpers that read typed values from decoded JSON and raise a
-/// [ModelException] (the pydantic ValidationError equivalent) on mismatch.
-T req<T>(Json json, String key, String model) {
+/// [_ModelException] (the pydantic ValidationError equivalent) on mismatch.
+T _req<T>(_Json json, String key, String model) {
   if (!json.containsKey(key) || json[key] == null) {
-    throw ModelException('$model: field "$key" required');
+    throw _ModelException('$model: field "$key" required');
   }
-  return opt<T>(json, key, model) as T;
+  return _opt<T>(json, key, model) as T;
 }
 
-T? opt<T>(Json json, String key, String model) {
+T? _opt<T>(_Json json, String key, String model) {
   final v = json[key];
   if (v == null) return null;
   if (v is T) return v;
-  throw ModelException(
+  throw _ModelException(
       '$model: field "$key" expected $T, got ${v.runtimeType}');
 }
 
-Json reqMap(Json json, String key, String model) =>
-    Map<String, dynamic>.from(req<Map>(json, key, model));
+_Json _reqMap(_Json json, String key, String model) =>
+    Map<String, dynamic>.from(_req<Map>(json, key, model));
 
-Json? optMap(Json json, String key, String model) {
-  final v = opt<Map>(json, key, model);
+_Json? _optMap(_Json json, String key, String model) {
+  final v = _opt<Map>(json, key, model);
   return v == null ? null : Map<String, dynamic>.from(v);
 }
 
-List<T> listOf<T>(Json json, String key, String model,
+List<T> _listOf<T>(_Json json, String key, String model,
     {bool required = false}) {
   final v =
-      required ? req<List>(json, key, model) : opt<List>(json, key, model);
+      required ? _req<List>(json, key, model) : _opt<List>(json, key, model);
   if (v == null) return <T>[];
   try {
     return v.cast<T>().toList();
   } on TypeError {
-    throw ModelException('$model: field "$key" expected List<$T>');
+    throw _ModelException('$model: field "$key" expected List<$T>');
   }
 }

@@ -1,14 +1,13 @@
-import '../utils.dart';
-import 'json.dart';
+part of '../lookup.dart';
 
-class LastAnalysisStats {
+class _LastAnalysisStats {
   final int harmless;
   final int malicious;
   final int suspicious;
   final int timeout;
   final int undetected;
 
-  const LastAnalysisStats({
+  const _LastAnalysisStats({
     required this.harmless,
     required this.malicious,
     required this.suspicious,
@@ -16,18 +15,18 @@ class LastAnalysisStats {
     required this.undetected,
   });
 
-  factory LastAnalysisStats.fromJson(Json j) {
+  factory _LastAnalysisStats.fromJson(_Json j) {
     const m = 'LastAnalysisStats';
-    return LastAnalysisStats(
-      harmless: req<int>(j, 'harmless', m),
-      malicious: req<int>(j, 'malicious', m),
-      suspicious: req<int>(j, 'suspicious', m),
-      timeout: req<int>(j, 'timeout', m),
-      undetected: req<int>(j, 'undetected', m),
+    return _LastAnalysisStats(
+      harmless: _req<int>(j, 'harmless', m),
+      malicious: _req<int>(j, 'malicious', m),
+      suspicious: _req<int>(j, 'suspicious', m),
+      timeout: _req<int>(j, 'timeout', m),
+      undetected: _req<int>(j, 'undetected', m),
     );
   }
 
-  Json toJson() => {
+  _Json toJson() => {
         'harmless': harmless,
         'malicious': malicious,
         'suspicious': suspicious,
@@ -36,33 +35,33 @@ class LastAnalysisStats {
       };
 }
 
-class AnalysisResult {
+class _AnalysisResult {
   final String category;
   final String engineName;
   final String method;
   final String result;
 
-  const AnalysisResult(
+  const _AnalysisResult(
       this.category, this.engineName, this.method, this.result);
 
-  factory AnalysisResult.fromJson(Json j) {
+  factory _AnalysisResult.fromJson(_Json j) {
     const m = 'AnalysisResult';
-    return AnalysisResult(
-      req<String>(j, 'category', m),
-      req<String>(j, 'engine_name', m),
-      req<String>(j, 'method', m),
-      req<String>(j, 'result', m),
+    return _AnalysisResult(
+      _req<String>(j, 'category', m),
+      _req<String>(j, 'engine_name', m),
+      _req<String>(j, 'method', m),
+      _req<String>(j, 'result', m),
     );
   }
 }
 
 /// Port of `Domain` / `DomainAttributes`.
-class VtDomain {
+class _VtDomain {
   final String id;
   final String type;
   final String? jarm;
-  final Map<String, AnalysisResult> lastAnalysisResults;
-  final LastAnalysisStats lastAnalysisStats;
+  final Map<String, _AnalysisResult> lastAnalysisResults;
+  final _LastAnalysisStats lastAnalysisStats;
   final int? lastHttpsCertificateDate;
   final int? lastModificationDate;
   final int reputation;
@@ -74,7 +73,7 @@ class VtDomain {
   final Map<String, int> popularityRanks;
   final String? registrar;
 
-  const VtDomain({
+  const _VtDomain({
     required this.id,
     required this.type,
     this.jarm,
@@ -92,36 +91,36 @@ class VtDomain {
     this.registrar,
   });
 
-  factory VtDomain.fromJson(Json json) {
+  factory _VtDomain.fromJson(_Json json) {
     const m = 'Domain';
-    final data = reqMap(json, 'data', m);
-    final a = reqMap(data, 'attributes', m);
-    final results = reqMap(a, 'last_analysis_results', m).map((k, v) =>
-        MapEntry(k, AnalysisResult.fromJson(Map<String, dynamic>.from(v))));
-    final ranks = reqMap(a, 'popularity_ranks', m).map((k, v) =>
-        MapEntry(k, req<int>(Map<String, dynamic>.from(v), 'rank', m)));
-    return VtDomain(
-      id: req<String>(data, 'id', m),
-      type: req<String>(data, 'type', m),
-      jarm: opt<String>(a, 'jarm', m),
+    final data = _reqMap(json, 'data', m);
+    final a = _reqMap(data, 'attributes', m);
+    final results = _reqMap(a, 'last_analysis_results', m).map((k, v) =>
+        MapEntry(k, _AnalysisResult.fromJson(Map<String, dynamic>.from(v))));
+    final ranks = _reqMap(a, 'popularity_ranks', m).map((k, v) =>
+        MapEntry(k, _req<int>(Map<String, dynamic>.from(v), 'rank', m)));
+    return _VtDomain(
+      id: _req<String>(data, 'id', m),
+      type: _req<String>(data, 'type', m),
+      jarm: _opt<String>(a, 'jarm', m),
       lastAnalysisResults: results,
       lastAnalysisStats:
-          LastAnalysisStats.fromJson(reqMap(a, 'last_analysis_stats', m)),
-      lastHttpsCertificateDate: opt<int>(a, 'last_https_certificate_date', m),
-      lastModificationDate: opt<int>(a, 'last_modification_date', m),
-      reputation: req<int>(a, 'reputation', m),
-      tags: listOf<String>(a, 'tags', m, required: true),
-      categories: transformCategories(reqMap(a, 'categories', m)),
-      creationDate: opt<int>(a, 'creation_date', m),
-      lastDnsRecordsDate: opt<int>(a, 'last_dns_records_date', m),
-      lastUpdateDate: opt<int>(a, 'last_update_date', m),
+          _LastAnalysisStats.fromJson(_reqMap(a, 'last_analysis_stats', m)),
+      lastHttpsCertificateDate: _opt<int>(a, 'last_https_certificate_date', m),
+      lastModificationDate: _opt<int>(a, 'last_modification_date', m),
+      reputation: _req<int>(a, 'reputation', m),
+      tags: _listOf<String>(a, 'tags', m, required: true),
+      categories: transformCategories(_reqMap(a, 'categories', m)),
+      creationDate: _opt<int>(a, 'creation_date', m),
+      lastDnsRecordsDate: _opt<int>(a, 'last_dns_records_date', m),
+      lastUpdateDate: _opt<int>(a, 'last_update_date', m),
       popularityRanks: ranks,
-      registrar: opt<String>(a, 'registrar', m),
+      registrar: _opt<String>(a, 'registrar', m),
     );
   }
 
   /// Splits, lowercases, dedupes and sorts the VT categories.
-  static List<String> transformCategories(Json v) {
+  static List<String> transformCategories(_Json v) {
     final cats = <String>{};
     for (final category in v.values.cast<String>()) {
       final delimiter =
@@ -141,7 +140,7 @@ class VtDomain {
           if (e.value.category == 'malicious') e.key,
       ];
 
-  Json toJson() => {
+  _Json toJson() => {
         'id': id,
         'type': type,
         'link': 'https://www.virustotal.com/gui/domain/$id',
@@ -153,24 +152,24 @@ class VtDomain {
         'tags': tags,
         'registrar': registrar,
         'jarm': jarm,
-        'creation_date': standardizeTimestamp(creationDate),
-        'last_update_date': standardizeTimestamp(lastUpdateDate),
-        'last_modification_date': standardizeTimestamp(lastModificationDate),
-        'last_dns_records_date': standardizeTimestamp(lastDnsRecordsDate),
+        'creation_date': _standardizeTimestamp(creationDate),
+        'last_update_date': _standardizeTimestamp(lastUpdateDate),
+        'last_modification_date': _standardizeTimestamp(lastModificationDate),
+        'last_dns_records_date': _standardizeTimestamp(lastDnsRecordsDate),
         'last_https_certificate_date':
-            standardizeTimestamp(lastHttpsCertificateDate),
+            _standardizeTimestamp(lastHttpsCertificateDate),
       };
 }
 
-class Resolution {
+class _Resolution {
   final int date;
   final String hostName;
   final String resolver;
   final String ipAddress;
-  final LastAnalysisStats ipAddressLastAnalysisStats;
-  final LastAnalysisStats hostNameLastAnalysisStats;
+  final _LastAnalysisStats ipAddressLastAnalysisStats;
+  final _LastAnalysisStats hostNameLastAnalysisStats;
 
-  const Resolution({
+  const _Resolution({
     required this.date,
     required this.hostName,
     required this.resolver,
@@ -179,36 +178,36 @@ class Resolution {
     required this.hostNameLastAnalysisStats,
   });
 
-  factory Resolution.fromJson(Json json) {
+  factory _Resolution.fromJson(_Json json) {
     const m = 'Resolution';
-    final a = reqMap(json, 'attributes', m);
-    return Resolution(
-      date: req<int>(a, 'date', m),
-      hostName: req<String>(a, 'host_name', m),
-      resolver: req<String>(a, 'resolver', m),
-      ipAddress: req<String>(a, 'ip_address', m),
-      ipAddressLastAnalysisStats: LastAnalysisStats.fromJson(
-          reqMap(a, 'ip_address_last_analysis_stats', m)),
-      hostNameLastAnalysisStats: LastAnalysisStats.fromJson(
-          reqMap(a, 'host_name_last_analysis_stats', m)),
+    final a = _reqMap(json, 'attributes', m);
+    return _Resolution(
+      date: _req<int>(a, 'date', m),
+      hostName: _req<String>(a, 'host_name', m),
+      resolver: _req<String>(a, 'resolver', m),
+      ipAddress: _req<String>(a, 'ip_address', m),
+      ipAddressLastAnalysisStats: _LastAnalysisStats.fromJson(
+          _reqMap(a, 'ip_address_last_analysis_stats', m)),
+      hostNameLastAnalysisStats: _LastAnalysisStats.fromJson(
+          _reqMap(a, 'host_name_last_analysis_stats', m)),
     );
   }
 }
 
 /// Port of `Resolutions`.
-class Resolutions {
+class _Resolutions {
   final int count;
-  final List<Resolution> data;
+  final List<_Resolution> data;
 
-  const Resolutions(this.count, this.data);
+  const _Resolutions(this.count, this.data);
 
-  factory Resolutions.fromJson(Json json) {
+  factory _Resolutions.fromJson(_Json json) {
     const m = 'Resolutions';
-    return Resolutions(
-      req<int>(reqMap(json, 'meta', m), 'count', m),
+    return _Resolutions(
+      _req<int>(_reqMap(json, 'meta', m), 'count', m),
       [
-        for (final r in req<List>(json, 'data', m))
-          Resolution.fromJson(Map<String, dynamic>.from(r)),
+        for (final r in _req<List>(json, 'data', m))
+          _Resolution.fromJson(Map<String, dynamic>.from(r)),
       ],
     );
   }

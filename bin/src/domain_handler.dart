@@ -1,49 +1,40 @@
-import 'package:http/http.dart' as http;
-
-import 'clients.dart';
-import 'config.dart';
-import 'lookup_result.dart';
-import 'models/ip_enrichment.dart';
-import 'models/json.dart';
-import 'models/virustotal.dart';
-import 'models/whois.dart';
-import 'utils.dart';
+part of 'lookup.dart';
 
 /// Logic handler for domain and hostname inputs
 /// (port of `handlers/domain.py` + `handlers/base.py`).
 ///
 /// Run it via `lookup()` in `lookup.dart`, which wraps the result in a
-/// [LookupResult].
-class DomainHandler {
+/// [_LookupResult].
+class _DomainHandler {
   final String entity;
   final int maxResolutions;
 
-  final VTClient? _vt;
-  final IpEnricherClient<IpGeoAsn> _geoasn;
-  final WhoisClient? _whois;
-  final ShodanClient? _shodan;
-  final GreynoiseClient? _greynoise;
-  final AbuseIpDbClient? _abuseipdb;
-  final UrlHausClient? _urlhaus;
+  final _VTClient? _vt;
+  final _IpEnricherClient<_IpGeoAsn> _geoasn;
+  final _WhoisClient? _whois;
+  final _ShodanClient? _shodan;
+  final _GreynoiseClient? _greynoise;
+  final _AbuseIpDbClient? _abuseipdb;
+  final _UrlHausClient? _urlhaus;
 
   // Dataset containers
-  VtDomain? vtInfo;
-  Resolutions? resolutions;
-  Map<String, IpGeoAsn> geoasn = {};
-  Whois? whois;
-  Map<String, ShodanIp> shodan = {};
-  Map<String, GreynoiseIp> greynoise = {};
-  Map<String, AbuseIpDb> abuseipdb = {};
-  Map<String, UrlHaus> urlhaus = {};
+  _VtDomain? vtInfo;
+  _Resolutions? resolutions;
+  Map<String, _IpGeoAsn> geoasn = {};
+  _Whois? whois;
+  Map<String, _ShodanIp> shodan = {};
+  Map<String, _GreynoiseIp> greynoise = {};
+  Map<String, _AbuseIpDb> abuseipdb = {};
+  Map<String, _UrlHaus> urlhaus = {};
 
   /// Errors of all sources, collected instead of thrown.
-  final List<LookupError> errors;
+  final List<_LookupError> errors;
 
-  DomainHandler(String entity, WtfisConfig config, http.Client client,
-      [List<LookupError>? errors])
-      : this._(refang(entity).trim(), config, client, errors ?? []);
+  _DomainHandler(String entity, _WtfisConfig config, http.Client client,
+      [List<_LookupError>? errors])
+      : this._(_refang(entity).trim(), config, client, errors ?? []);
 
-  DomainHandler._(this.entity, WtfisConfig config, http.Client client,
+  _DomainHandler._(this.entity, _WtfisConfig config, http.Client client,
       this.errors)
       : maxResolutions = config.maxResolutions,
         _vt = config.vtClient(client, errors),
@@ -78,7 +69,7 @@ class DomainHandler {
   }
 
   /// Collected data as JSON-serializable map (without errors).
-  Json toJson() {
+  _Json toJson() {
     final res = resolutions;
     return {
       'virustotal': vtInfo?.toJson(),
@@ -91,7 +82,7 @@ class DomainHandler {
                 for (final r in res.data.take(maxResolutions))
                   {
                     'ip': r.ipAddress,
-                    'resolved': standardizeTimestamp(r.date),
+                    'resolved': _standardizeTimestamp(r.date),
                     'resolver': r.resolver,
                     'last_analysis_stats':
                         r.ipAddressLastAnalysisStats.toJson(),
