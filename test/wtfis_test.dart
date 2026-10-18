@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 import '../bin/src/config.dart';
 import '../bin/src/exceptions.dart';
 import '../bin/src/lookup.dart';
+import '../bin/src/lookup_result.dart';
 import '../bin/src/models/ip_enrichment.dart';
 import '../bin/src/models/virustotal.dart';
 import '../bin/src/models/whois.dart';
@@ -22,7 +23,11 @@ http.Response jsonResponse(Object? body, [int status = 200]) =>
 
 /// Mock of all APIs serving the "gist.github.com" fixtures.
 MockClient gistApis(
-    {int vtStatus = 200, Object? vtDomainBody, List<Uri>? requests}) {
+    {int vtStatus = 200,
+    String? vtErrorBody,
+    Object? vtDomainBody,
+    int? shodanStatus,
+    List<Uri>? requests}) {
   final ipwhois = testData('ipwhois_gist.json') as Map;
   final shodan = testData('shodan_gist.json') as Map;
   return MockClient((req) async {
@@ -30,7 +35,12 @@ MockClient gistApis(
     final url = req.url;
     switch (url.host) {
       case 'www.virustotal.com':
-        if (vtStatus != 200) return jsonResponse({}, vtStatus);
+        if (vtStatus != 200) {
+          return vtErrorBody == null
+              ? jsonResponse({}, vtStatus)
+              : http.Response(vtErrorBody, vtStatus,
+                  headers: {'content-type': 'text/html'});
+        }
         if (url.path.endsWith('/resolutions')) {
           return jsonResponse(testData('vt_resolutions_gist.json'));
         }
@@ -43,6 +53,7 @@ MockClient gistApis(
       case 'api.ip2whois.com':
         return jsonResponse(testData('ip2whois_whois_gist.json'));
       case 'api.shodan.io':
+        if (shodanStatus != null) return http.Response('', shodanStatus);
         final ip = url.pathSegments.last;
         return shodan.containsKey(ip)
             ? jsonResponse(shodan[ip])
@@ -66,7 +77,8 @@ void main() {
 
       expect(out['entity'], 'gist.github.com');
       expect(out['type'], 'domain');
-      expect(out['warnings'], isEmpty);
+      expect(out['ok'], isTrue);
+      expect(out['errors'], isEmpty);
 
       final vt = out['virustotal'];
       expect(vt['id'], 'gist.github.com');
@@ -163,31 +175,102 @@ void main() {
       expect(out['whois'], isNotNull);
     });
 
-    test('HTTP errors fail open as warnings', () async {
+    test('HTTP errors are collected with status, url and body', () async {
       final out = jsonDecode(await lookupDomain('gist.github.com',
           config: WtfisConfig(vtApiKey: 'foo'),
           httpClient: gistApis(vtStatus: 401)));
+      expect(out['ok'], isFalse);
       expect(out['virustotal'], isNull);
-      expect(out['warnings'], isNotEmpty);
-      expect(out['warnings'][0],
-          startsWith('Could not fetch Virustotal: 401 Client Error'));
-      expect(out['warnings'][0], isNot(contains('foo')));
+      final errors = out['errors'] as List;
+      // domain, resolutions and whois (VT fallback) all fail
+      expect(errors, hasLength(3));
+      expect(errors[0], {
+        'source': 'Virustotal',
+        'type': 'http',
+        'message': startsWith('401 Client Error'),
+        'status_code': 401,
+        'url': 'https://www.virustotal.com/api/v3/domains/gist.github.com',
+        'body': '{}',
+      });
+      expect(jsonEncode(out), isNot(contains('foo')));
     });
 
-    test('invalid API data raises HandlerException', () async {
-      expect(
-        lookupDomain('gist.github.com',
-            config: WtfisConfig(vtApiKey: 'foo'),
-            httpClient:
-                gistApis(vtDomainBody: {'intentionally': 'wrong data'})),
-        throwsA(isA<HandlerException>().having((e) => e.message, 'message',
-            startsWith('Data model validation error'))),
-      );
+    test('HTML error pages are kept (truncated) in the error', () async {
+      final page = '<html><body><h1>502 Bad Gateway</h1>'
+          '${'x' * 2000}</body></html>';
+      final result = await lookup('gist.github.com',
+          config: WtfisConfig(vtApiKey: 'foo'),
+          httpClient: gistApis(vtStatus: 502, vtErrorBody: page));
+      final e = result.httpErrors.first;
+      expect(e.statusCode, 502);
+      expect(e.message, startsWith('502 Server Error'));
+      expect(e.body, startsWith('<html><body><h1>502 Bad Gateway</h1>'));
+      expect(e.body!.length, LookupError.maxBodyLength + 1);
     });
 
-    test('rejects IP addresses', () {
-      expect(() => lookupDomain('1.1.1.1', config: WtfisConfig()),
-          throwsArgumentError);
+    test('API keys in query parameters are not part of error urls', () async {
+      final result = await lookup('gist.github.com',
+          config: WtfisConfig(
+              vtApiKey: 'foo', shodanApiKey: 'hunter2', useShodan: true),
+          httpClient: gistApis(shodanStatus: 500));
+      final shodan = result.errors.where((e) => e.source == 'Shodan');
+      expect(shodan, hasLength(3)); // one per resolved IP
+      expect(shodan.first.url.toString(),
+          'https://api.shodan.io/shodan/host/13.234.210.38');
+      expect(result.toJsonString(), isNot(contains('hunter2')));
+      // the other sources are still filled
+      expect(result.data!['virustotal'], isNotNull);
+      expect(result.data!['whois'], isNotNull);
+    });
+
+    test('tolerated 404 (Shodan: IP unknown) is no error', () async {
+      final result = await lookup('gist.github.com',
+          config: WtfisConfig(
+              vtApiKey: 'foo', shodanApiKey: 'hunter2', useShodan: true),
+          httpClient: gistApis(shodanStatus: 404));
+      expect(result.ok, isTrue);
+    });
+
+    test('network errors are collected', () async {
+      final result = await lookup('gist.github.com',
+          config: WtfisConfig(vtApiKey: 'foo'),
+          httpClient: MockClient(
+              (req) async => throw http.ClientException('Connection refused')));
+      expect(result.ok, isFalse);
+      expect(result.aborted, isFalse);
+      expect(result.errors.map((e) => e.kind),
+          everyElement(LookupErrorKind.network));
+      expect(result.errors.first.message, 'Connection refused');
+    });
+
+    test('invalid API data is collected as model error', () async {
+      final out = jsonDecode(await lookupDomain('gist.github.com',
+          config: WtfisConfig(vtApiKey: 'foo'),
+          httpClient:
+              gistApis(vtDomainBody: {'intentionally': 'wrong data'})));
+      final errors = out['errors'] as List;
+      expect(errors, hasLength(1));
+      expect(errors[0]['type'], 'model');
+      expect(errors[0]['source'], 'Virustotal');
+      expect(errors[0]['message'], startsWith('Data model validation error'));
+      // the remaining sources are still returned
+      expect(out['virustotal'], isNull);
+      expect(out['resolutions'], isNotNull);
+      expect(out['whois'], isNotNull);
+    });
+
+    test('rejects IP addresses with an input error', () async {
+      final result = await lookup('1.1.1.1', config: WtfisConfig());
+      expect(result.aborted, isTrue);
+      expect(result.errors.single.kind, LookupErrorKind.input);
+      expect(result.toJson()['errors'][0]['type'], 'input');
+    });
+
+    test('invalid config is reported instead of thrown', () async {
+      final result = await lookup('example.com',
+          config: WtfisConfig(maxResolutions: 11), httpClient: gistApis());
+      expect(result.aborted, isTrue);
+      expect(result.errors.single.kind, LookupErrorKind.config);
     });
 
     test('pretty output is indented', () async {
@@ -215,10 +298,16 @@ void main() {
     });
 
     test('validations', () {
-      expect(() => WtfisConfig(maxResolutions: 11), throwsArgumentError);
-      expect(() => WtfisConfig(geolocationService: 'foo'), throwsArgumentError);
-      expect(() => WtfisConfig(geolocationService: 'ip2location'),
-          throwsArgumentError);
+      expect(WtfisConfig().validate(), isEmpty);
+      expect(WtfisConfig(maxResolutions: 11).validate(), hasLength(1));
+      expect(WtfisConfig(geolocationService: 'foo').validate(), hasLength(1));
+      expect(WtfisConfig(geolocationService: 'ip2location').validate(),
+          hasLength(1));
+      expect(
+          WtfisConfig(maxResolutions: -1, geolocationService: 'foo')
+              .validate()
+              .map((e) => e.kind),
+          [LookupErrorKind.config, LookupErrorKind.config]);
     });
   });
 

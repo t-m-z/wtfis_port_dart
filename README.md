@@ -5,9 +5,15 @@ einem Tool für passive Domain-/Hostname-Lookups.
 
 Der Port ist eine reine Kommandozeilen-Anwendung – keine Library, keine `export`-Anweisungen.
 Kern ist **eine Funktion, die eine Domain entgegennimmt und das Ergebnis als JSON-String liefert**:
-`lookupDomain()` in [`bin/src/lookup.dart`](bin/src/lookup.dart).
+`lookupDomain()` in [`bin/src/lookup.dart`](bin/src/lookup.dart). Daneben liefert `lookup()` dasselbe
+Ergebnis als Objekt der Ausgabeklasse `LookupResult` ([`bin/src/lookup_result.dart`](bin/src/lookup_result.dart)).
 
-Da Netzwerkzugriffe in Dart asynchron sind, liefert die Funktion ein `Future<String>`.
+Da Netzwerkzugriffe in Dart asynchron sind, liefern beide Funktionen ein `Future`.
+
+**Es werden keine Exceptions geworfen.** Alle Fehler – ungültige Eingabe, ungültige Konfiguration,
+HTTP-Fehler, Netzwerkfehler und API-Daten, die nicht zum erwarteten Modell passen – werden gesammelt
+und unter `"errors"` ausgegeben. Fällt eine Quelle aus, ist ihr Eintrag `null`, alle anderen Quellen
+werden trotzdem abgefragt.
 
 ## Aufbau
 
@@ -15,11 +21,12 @@ Da Netzwerkzugriffe in Dart asynchron sind, liefert die Funktion ein `Future<Str
 bin/
   wtfis.dart            # Einstiegspunkt (CLI)
   src/
-    lookup.dart         # lookupDomain()
+    lookup.dart         # lookup(), lookupDomain()
+    lookup_result.dart  # Ausgabeklassen LookupResult, LookupError
     domain_handler.dart # Ablauf des Domain-Lookups
     clients.dart        # API-Clients
     config.dart         # WtfisConfig, ~/.env.wtfis
-    exceptions.dart
+    exceptions.dart     # ModelException (nur intern beim Parsen)
     utils.dart
     models/             # Datenmodelle der APIs
 test/
@@ -28,21 +35,45 @@ test/
 
 Jede Datei importiert die benötigten Dateien direkt über relative Pfade.
 
-## Signatur
+## Signaturen
 
 ```dart
-Future<String> lookupDomain(
+Future<LookupResult> lookup(
   String domain, {
   WtfisConfig? config,      // Standard: WtfisConfig.fromEnvironment()
   http.Client? httpClient,  // optional, z. B. für Tests
+});
+
+Future<String> lookupDomain(
+  String domain, {
+  WtfisConfig? config,
+  http.Client? httpClient,
   bool pretty = false,      // eingerückte Ausgabe
 });
 ```
 
 * Defangte Eingaben wie `example[.]com` werden akzeptiert.
-* Nicht erreichbare Quellen (HTTP-/Netzwerkfehler) brechen nicht ab, sondern landen unter `"warnings"`.
-* Liefert eine API Daten, die nicht zum erwarteten Modell passen, wird eine `HandlerException` geworfen.
-* IP-Adressen werden mit `ArgumentError` abgelehnt (dieser Port deckt nur Domains ab).
+* IP-Adressen werden mit einem Fehler vom Typ `input` abgelehnt (dieser Port deckt nur Domains ab).
+
+## Ausgabeklasse `LookupResult`
+
+| Member | Bedeutung |
+|---|---|
+| `entity` | normalisierte Domain |
+| `data` | gesammelte Daten (`virustotal`, `urlhaus`, `resolutions`, `whois`), `null` bei Abbruch |
+| `errors` | Liste von `LookupError` |
+| `ok` | `true`, wenn kein Fehler aufgetreten ist |
+| `aborted` | `true`, wenn der Lookup wegen Eingabe-/Konfigurationsfehler gar nicht lief |
+| `httpErrors` | nur die HTTP-Fehler |
+| `toJson()` / `toJsonString(pretty: …)` | Ausgabe als Map bzw. JSON |
+
+Ein `LookupError` hat die Felder `kind` (`input`, `config`, `http`, `network`, `model`, `internal`),
+`source` (z. B. `Virustotal`), `message` und – bei HTTP-Fehlern – `statusCode`, `url` und `body`.
+`body` enthält die Antwort des Servers (z. B. eine HTML-Fehlerseite), gekürzt auf 1000 Zeichen.
+Aus `url` werden Query-Parameter entfernt, damit API-Keys nicht in der Ausgabe landen.
+
+Antworten, die das Original bewusst ignoriert (Shodan/Greynoise 404 = IP unbekannt, IP2Whois 404/ungültige
+Domain), gelten nicht als Fehler.
 
 ## Datenquellen und Konfiguration
 
@@ -77,6 +108,7 @@ final json = await lookupDomain(
 {
   "entity": "gist.github.com",
   "type": "domain",
+  "ok": false,
   "virustotal": {
     "id": "gist.github.com",
     "last_analysis_stats": {"harmless": 84, "malicious": 0, "suspicious": 0, "timeout": 0, "undetected": 10},
@@ -103,7 +135,16 @@ final json = await lookupDomain(
     ]
   },
   "whois": {"source": "virustotal", "domain": "github.com", "registrar": "MarkMonitor Inc.", "name_servers": ["..."], "...": "..."},
-  "warnings": []
+  "errors": [
+    {
+      "source": "Shodan",
+      "type": "http",
+      "message": "502 Server Error (Bad Gateway)",
+      "status_code": 502,
+      "url": "https://api.shodan.io/shodan/host/13.234.210.38",
+      "body": "<html><head><title>502 Bad Gateway</title>…"
+    }
+  ]
 }
 ```
 
@@ -120,6 +161,10 @@ dart compile exe bin/wtfis.dart -o wtfis
 
 Optionen: `-A/--all`, `-s/--use-shodan`, `-g/--use-greynoise`, `-a/--use-abuseipdb`,
 `-u/--use-urlhaus`, `-m/--max-resolutions N`, `--geolocation-service`, `-p/--pretty`.
+
+Das JSON wird immer ausgegeben, auch wenn Fehler aufgetreten sind; die Fehler stehen zusätzlich
+auf stderr. Exit-Codes: `0` ohne Fehler, `1` wenn einzelne Quellen fehlgeschlagen sind,
+`64` bei falscher Bedienung, ungültiger Eingabe oder Konfiguration.
 
 ## Tests
 

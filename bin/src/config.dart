@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import 'clients.dart';
+import 'lookup_result.dart';
 import 'models/ip_enrichment.dart';
 
 const abuseIpDbApiKeyVar = 'ABUSEIPDB_API_KEY';
@@ -58,19 +59,23 @@ class WtfisConfig {
     this.useAbuseIpDb = false,
     this.useUrlHaus = false,
     this.maxResolutions = defaultMaxResolutions,
-  }) {
-    if (maxResolutions < 0 || maxResolutions > 10) {
-      throw ArgumentError.value(
-          maxResolutions, 'maxResolutions', 'Maximum value is 10');
-    }
-    if (!geolocationServices.contains(geolocationService)) {
-      throw ArgumentError.value(geolocationService, 'geolocationService',
-          'Valid services are: ${geolocationServices.join(', ')}');
-    }
-    if (geolocationService == 'ip2location' && ip2LocationApiKey.isEmpty) {
-      throw ArgumentError('$ip2LocationApiKeyVar is not set');
-    }
-  }
+  });
+
+  /// Checks the configuration. Instead of throwing, all problems are
+  /// returned as [LookupError]s of kind [LookupErrorKind.config].
+  List<LookupError> validate() => [
+        if (maxResolutions < 0 || maxResolutions > 10)
+          _configError('maxResolutions: Maximum value is 10 '
+              '(got $maxResolutions)'),
+        if (!geolocationServices.contains(geolocationService))
+          _configError('geolocationService: Valid services are: '
+              '${geolocationServices.join(', ')} (got $geolocationService)'),
+        if (geolocationService == 'ip2location' && ip2LocationApiKey.isEmpty)
+          _configError('$ip2LocationApiKeyVar is not set'),
+      ];
+
+  static LookupError _configError(String message) =>
+      LookupError(LookupErrorKind.config, 'config', message);
 
   /// Builds the config from environment variables and `~/.env.wtfis`
   /// (variables already set in the environment take precedence).
@@ -136,41 +141,44 @@ class WtfisConfig {
 
   // Clients
 
-  VTClient? vtClient(http.Client c) =>
-      vtApiKey.isNotEmpty ? VTClient(vtApiKey, c) : null;
+  VTClient? vtClient(http.Client c, List<LookupError> e) =>
+      vtApiKey.isNotEmpty ? VTClient(vtApiKey, c, e) : null;
 
-  IpEnricherClient<IpGeoAsn> geoAsnClient(http.Client c) =>
+  IpEnricherClient<IpGeoAsn> geoAsnClient(
+          http.Client c, List<LookupError> e) =>
       switch (geolocationService) {
-        'ip2location' => Ip2LocationClient(ip2LocationApiKey, c),
-        'ipinfo' => IpInfoClient(c),
-        _ => IpWhoisClient(c),
+        'ip2location' => Ip2LocationClient(ip2LocationApiKey, c, e),
+        'ipinfo' => IpInfoClient(c, e),
+        _ => IpWhoisClient(c, e),
       };
 
   /// IP2Whois is preferred for domains; Virustotal is the fallback.
-  WhoisClient? whoisClient(http.Client c) {
-    if (ip2WhoisApiKey.isNotEmpty) return Ip2WhoisClient(ip2WhoisApiKey, c);
-    if (vtApiKey.isNotEmpty) return VTClient(vtApiKey, c);
+  WhoisClient? whoisClient(http.Client c, List<LookupError> e) {
+    if (ip2WhoisApiKey.isNotEmpty) {
+      return Ip2WhoisClient(ip2WhoisApiKey, c, e);
+    }
+    if (vtApiKey.isNotEmpty) return VTClient(vtApiKey, c, e);
     return null;
   }
 
-  ShodanClient? shodanClient(http.Client c) =>
+  ShodanClient? shodanClient(http.Client c, List<LookupError> e) =>
       (useShodan || all) && shodanApiKey.isNotEmpty
-          ? ShodanClient(shodanApiKey, c)
+          ? ShodanClient(shodanApiKey, c, e)
           : null;
 
-  GreynoiseClient? greynoiseClient(http.Client c) =>
+  GreynoiseClient? greynoiseClient(http.Client c, List<LookupError> e) =>
       (useGreynoise || all) && greynoiseApiKey.isNotEmpty
-          ? GreynoiseClient(greynoiseApiKey, c)
+          ? GreynoiseClient(greynoiseApiKey, c, e)
           : null;
 
-  AbuseIpDbClient? abuseIpDbClient(http.Client c) =>
+  AbuseIpDbClient? abuseIpDbClient(http.Client c, List<LookupError> e) =>
       (useAbuseIpDb || all) && abuseIpDbApiKey.isNotEmpty
-          ? AbuseIpDbClient(abuseIpDbApiKey, c)
+          ? AbuseIpDbClient(abuseIpDbApiKey, c, e)
           : null;
 
-  UrlHausClient? urlHausClient(http.Client c) =>
+  UrlHausClient? urlHausClient(http.Client c, List<LookupError> e) =>
       (useUrlHaus || all) && urlHausApiKey.isNotEmpty
-          ? UrlHausClient(urlHausApiKey, c)
+          ? UrlHausClient(urlHausApiKey, c, e)
           : null;
 }
 
