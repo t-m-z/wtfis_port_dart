@@ -473,7 +473,7 @@ void main() {
     test('IPv4-mapped IPv6 address of a public IPv4', () async {
       final result = await run('::FFFF:1.1.1.1', keys: vt, client: ipApis());
       expect(result.type, 'ip');
-      expect(result.entity, '::ffff:101:101');
+      expect(result.entity, '::ffff:1.1.1.1');
       expect(result.ok, isTrue);
     });
 

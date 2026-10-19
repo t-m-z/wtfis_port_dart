@@ -14,10 +14,17 @@ class _IpAddress {
 
   bool get isV4 => bytes.length == 4;
 
+  /// `true` for IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`).
+  bool get isV4Mapped =>
+      !isV4 &&
+      _inNet(bytes, const [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff], 96);
+
   /// Canonical notation: dotted decimal for IPv4, RFC 5952 for IPv6
-  /// (lowercase, no leading zeros, longest zero run as `::`).
+  /// (lowercase, no leading zeros, longest zero run as `::`, IPv4-mapped
+  /// addresses as `::ffff:a.b.c.d`).
   String get address {
     if (isV4) return bytes.join('.');
+    if (isV4Mapped) return '::ffff:${bytes.sublist(12).join('.')}';
     final groups = [
       for (var i = 0; i < 16; i += 2) (bytes[i] << 8) | bytes[i + 1],
     ];
@@ -150,7 +157,7 @@ bool _isGlobal(_IpAddress addr) {
     return !_nonGlobalV4.any((n) => _inNet(b, n.$1, n.$2));
   }
   // IPv4-mapped (::ffff:a.b.c.d): decided by the IPv4 address
-  if (_inNet(b, const [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff], 96)) {
+  if (addr.isV4Mapped) {
     return _isGlobal(_IpAddress(b.sublist(12)));
   }
   // unspecified (::), loopback (::1)
