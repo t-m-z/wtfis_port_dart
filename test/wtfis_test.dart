@@ -470,7 +470,23 @@ void main() {
       });
     }
 
+    test('IPv4-mapped IPv6 address of a public IPv4', () async {
+      final result = await run('::FFFF:1.1.1.1', keys: vt, client: ipApis());
+      expect(result.type, 'ip');
+      expect(result.entity, '::ffff:101:101');
+      expect(result.ok, isTrue);
+    });
+
+    for (final input in ['1.2.3', '256.1.1.1', '01.1.1.1', '1::2::3']) {
+      test('$input is no IP address and treated as domain', () async {
+        final result = await run(input, client: ipApis());
+        expect(result.type, 'domain');
+      });
+    }
+
     for (final input in [
+      '::ffff:10.0.0.1',
+      'ff02::1',
       '10.0.0.1',
       '192.168.1.1',
       '127.0.0.1',

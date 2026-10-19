@@ -49,9 +49,11 @@ abstract class _BaseClient {
       resp = await send();
     } on http.ClientException catch (e) {
       return _networkError(uri, e.message);
-    } on IOException catch (e) {
-      return _networkError(uri, e.toString());
     } on TimeoutException catch (e) {
+      return _networkError(uri, e.toString());
+    } on Exception catch (e) {
+      // e.g. SocketException / HandshakeException on native platforms;
+      // caught generically so that no dart:io import is needed (web)
       return _networkError(uri, e.toString());
     }
 

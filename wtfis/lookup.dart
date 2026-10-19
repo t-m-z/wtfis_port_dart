@@ -7,7 +7,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -65,7 +64,7 @@ Future<LookupResult> lookup(
   // -> 2606:4700:4700::1111
   final entity = ip == null
       ? _refang(address).trim()
-      : InternetAddress.fromRawAddress(ip.rawAddress).address;
+      : ip.address;
 
   LookupResult inputError(String message, {String? type}) =>
       LookupResult(entity, type: type, errors: [
