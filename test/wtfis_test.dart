@@ -301,6 +301,101 @@ void main() {
     });
   });
 
+  group('toText', () {
+    const allDomainKeys = {
+      'VT_API_KEY': 'foo',
+      'IP2WHOIS_API_KEY': 'alice',
+      'SHODAN_API_KEY': 'hunter2',
+      'URLHAUS_API_KEY': 'eve',
+    };
+
+    test('indented sections without braces, separated by blank lines',
+        () async {
+      final text = (await run('gist.github.com', keys: allDomainKeys)).toText();
+      expect(
+          text,
+          startsWith('entity: gist.github.com\n'
+              'type: domain\n'
+              'ok: true\n'
+              '\n'
+              'virustotal:\n'
+              '  id: gist.github.com\n'
+              '  type: domain\n'));
+      expect(
+          text,
+          contains('  last_analysis_stats:\n'
+              '    harmless: 84\n'
+              '    malicious: 0\n'));
+      expect(text, contains('  malicious_vendors: -\n'));
+      expect(
+          text,
+          contains('\n\nresolutions:\n'
+              '  total: 37\n'
+              '  data:\n'
+              '    - ip: 13.234.210.38\n'
+              '      resolved: 2022-08-06T14:56:20Z\n'));
+      // blank line between the list items
+      expect(text, contains('\n\n    - ip: 192.30.255.113\n'));
+      expect(text, contains('          Other: 22/tcp, 80/tcp, 443/tcp\n'));
+      expect(text, contains('\n\nwhois:\n  source: ip2whois\n'));
+      expect(text, endsWith('\n\nerrors: -'));
+      expect(text, isNot(contains(RegExp(r'[{}\[\]]'))));
+      // null and empty values are left out, no trailing spaces
+      expect(text, isNot(contains('hostname:')));
+      expect(text, isNot(contains(RegExp(r' $', multiLine: true))));
+    });
+
+    test('includeNulls and custom indent', () async {
+      final result = await run('gist.github.com', keys: vt);
+      final text = result.toText(includeNulls: true, indent: '\t');
+      expect(text, contains('\n\tid: gist.github.com\n'));
+      // resolution items: level 2 + item continuation + field level
+      expect(text, contains('\n\t\t\t\thostname: -\n'));
+      expect(text, contains('\n\t\t\tgreynoise: -\n'));
+      expect(text, contains('\n\t\t- ip: 13.234.210.38\n'));
+      expect(text, contains('\nurlhaus: -\n'));
+    });
+
+    test('errors with multi-line HTML body', () async {
+      final result = await run('gist.github.com',
+          keys: vt,
+          client: gistApis(
+              vtStatus: 502,
+              vtErrorBody: '<html>\n<body>Bad Gateway</body>\n</html>'));
+      final text = result.toText();
+      expect(text, contains('\nok: false\nvirustotal: -\n'));
+      expect(
+          text,
+          contains('\n\nerrors:\n'
+              '  - source: Virustotal\n'
+              '    type: http\n'
+              '    message: 502 Server Error'));
+      expect(
+          text,
+          contains('    body:\n'
+              '      <html>\n'
+              '      <body>Bad Gateway</body>\n'
+              '      </html>\n'));
+      expect(text, contains('\n\n  - source: Virustotal\n'));
+    });
+
+    test('input error', () async {
+      final text = (await run('10.0.0.1')).toText();
+      expect(
+          text,
+          'entity: 10.0.0.1\n'
+          'type: ip\n'
+          'ok: false\n'
+          '\n'
+          'errors:\n'
+          '  - source: input\n'
+          '    type: input\n'
+          '    message: Not a public IP address (private, loopback, '
+          'link-local, multicast, documentation or reserved range) '
+          '(got "10.0.0.1")');
+    });
+  });
+
   group('errors', () {
     test('HTTP errors are collected with status, url and body', () async {
       final out = await runJson('gist.github.com',

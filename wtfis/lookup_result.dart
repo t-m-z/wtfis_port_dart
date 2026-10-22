@@ -138,6 +138,119 @@ class LookupResult {
       (pretty ? const JsonEncoder.withIndent('  ') : const JsonEncoder())
           .convert(toJson());
 
+  /// Readable text form of [toJson]: one `key: value` per line, nested
+  /// values indented by [indent], no braces or brackets.
+  ///
+  /// * Top-level sections (`virustotal`, `resolutions`, ...) and the items
+  ///   of lists of objects (resolutions, URLhaus URLs, errors) are
+  ///   separated by blank lines; list items start with `- `.
+  /// * Lists of simple values are written comma-separated in one line;
+  ///   empty values and missing sections are written as `-`.
+  /// * Fields without a value (`null` or empty text) below the top level
+  ///   are left out; with [includeNulls] they are written as `-`.
+  /// * Multi-line values (e.g. an HTML error page) are indented below
+  ///   their key.
+  String toText({String indent = '  ', bool includeNulls = false}) {
+    final w = _TextWriter(indent, includeNulls);
+    for (final e in toJson().entries) {
+      final section = _TextWriter.isBlock(e.value);
+      if (section) w.blankLine();
+      w.entry(e.key, e.value, 0);
+      if (section) w.blankLine();
+    }
+    return w.toString();
+  }
+
   @override
   String toString() => toJsonString();
+}
+
+/// Writes JSON-like data as indented `key: value` lines (see
+/// [LookupResult.toText]).
+class _TextWriter {
+  final String indent;
+  final bool includeNulls;
+  final List<String> _lines = [];
+
+  _TextWriter(this.indent, this.includeNulls);
+
+  /// Values that get their own block of lines.
+  static bool isBlock(Object? v) =>
+      (v is Map<dynamic, dynamic> && v.isNotEmpty) ||
+      (v is List<dynamic> && v.any((x) => x is Map<dynamic, dynamic>));
+
+  /// Adds a blank line unless there is one already (or nothing yet).
+  void blankLine() {
+    if (_lines.isNotEmpty && _lines.last.isNotEmpty) _lines.add('');
+  }
+
+  void entries(Map<dynamic, dynamic> map, int level) {
+    for (final e in map.entries) {
+      if (_isMissing(e.value) && !includeNulls) continue;
+      entry('${e.key}', e.value, level);
+    }
+  }
+
+  void entry(String key, Object? value, int level) {
+    final pad = indent * level;
+    if (value is Map<dynamic, dynamic> && value.isNotEmpty) {
+      _lines.add('$pad$key:');
+      entries(value, level + 1);
+    } else if (isBlock(value)) {
+      _lines.add('$pad$key:');
+      _items(value as List<dynamic>, level + 1);
+    } else if (value is List<dynamic>) {
+      final text = value.isEmpty ? '-' : value.map(_scalar).join(', ');
+      _lines.add('$pad$key: $text');
+    } else if (value is Map<dynamic, dynamic>) {
+      _lines.add('$pad$key: -');
+    } else {
+      final text = _scalar(value);
+      if (text.contains('\n')) {
+        _lines.add('$pad$key:');
+        for (final line in text.split(RegExp(r'\r?\n'))) {
+          _lines.add('$pad$indent$line');
+        }
+      } else {
+        _lines.add('$pad$key: $text');
+      }
+    }
+  }
+
+  /// Items of a list of objects: `- ` before the first line of each item
+  /// (padded to the width of [indent] if it consists of spaces), [indent]
+  /// before the following lines, a blank line between items.
+  void _items(List<dynamic> items, int level) {
+    final pad = indent * level;
+    final marker = indent.length >= 2 && indent.trim().isEmpty &&
+            !indent.contains('\t')
+        ? '-'.padRight(indent.length)
+        : '- ';
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) _lines.add('');
+      final Object? item = items[i];
+      final sub = _TextWriter(indent, includeNulls);
+      if (item is Map<dynamic, dynamic>) {
+        sub.entries(item, 0);
+      } else {
+        sub._lines.add(_scalar(item));
+      }
+      for (var j = 0; j < sub._lines.length; j++) {
+        final line = sub._lines[j];
+        _lines.add(line.isEmpty ? '' : '$pad${j == 0 ? marker : indent}$line');
+      }
+    }
+  }
+
+  static bool _isMissing(Object? v) => v == null || v == '';
+
+  static String _scalar(Object? v) => _isMissing(v) ? '-' : '$v';
+
+  @override
+  String toString() {
+    while (_lines.isNotEmpty && _lines.last.isEmpty) {
+      _lines.removeLast();
+    }
+    return _lines.join('\n');
+  }
 }

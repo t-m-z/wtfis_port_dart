@@ -45,6 +45,9 @@ part 'utils.dart';
 /// that does not match the expected model - is collected in
 /// [LookupResult.errors]. Sources that failed are `null` in the result, all
 /// others are filled as usual.
+///
+/// The result can be output as JSON ([LookupResult.toJsonString]) or as
+/// readable indented text ([LookupResult.toText]).
 Future<LookupResult> lookup(
   String address, {
   String? vtApiKey,
