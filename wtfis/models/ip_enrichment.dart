@@ -181,7 +181,8 @@ class _ShodanIp {
         'ports': _raw['ports'],
         'services': groupPortsByProduct(),
         'tags': _raw['tags'],
-        'last_update': _standardizeTimestamp(_raw['last_update']),
+        // Shodan timestamps are UTC without zone (original: "+00:00")
+        'last_update': _standardizeTimestamp('${_raw['last_update']}+00:00'),
         'link': 'https://www.shodan.io/host/$ipStr',
       };
 }

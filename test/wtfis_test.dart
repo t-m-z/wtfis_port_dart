@@ -226,6 +226,8 @@ void main() {
 
       final shodan = out['resolutions']['data'][0]['shodan'];
       expect(shodan['ip'], '13.234.210.38');
+      // Shodan timestamps are UTC (independent of the local time zone)
+      expect(shodan['last_update'], '2022-08-21T07:21:05Z');
       expect(shodan['services'], {
         'Other': ['22/tcp', '80/tcp', '443/tcp']
       });
