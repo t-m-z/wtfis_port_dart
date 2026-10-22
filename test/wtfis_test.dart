@@ -315,44 +315,77 @@ void main() {
       expect(
           text,
           startsWith('entity: gist.github.com\n'
-              'type: domain\n'
-              'ok: true\n'
+              'type  : domain\n'
+              'ok    : true\n'
               '\n'
               'virustotal:\n'
-              '  id: gist.github.com\n'
-              '  type: domain\n'));
+              '  id                         : gist.github.com\n'
+              '  type                       : domain\n'));
       expect(
           text,
-          contains('  last_analysis_stats:\n'
-              '    harmless: 84\n'
-              '    malicious: 0\n'));
-      expect(text, contains('  malicious_vendors: -\n'));
+          contains('  last_analysis_stats        :\n'
+              '    harmless  : 84\n'
+              '    malicious : 0\n'));
+      expect(text, contains('  malicious_vendors          : -\n'));
       expect(
           text,
           contains('\n\nresolutions:\n'
               '  total: 37\n'
-              '  data:\n'
-              '    - ip: 13.234.210.38\n'
-              '      resolved: 2022-08-06T14:56:20Z\n'));
+              '  data :\n'
+              '    - ip                 : 13.234.210.38\n'
+              '      resolved           : 2022-08-06T14:56:20Z\n'));
       // blank line between the list items
-      expect(text, contains('\n\n    - ip: 192.30.255.113\n'));
+      expect(text, contains('\n\n    - ip                 : 192.30.255.113\n'));
       expect(text, contains('          Other: 22/tcp, 80/tcp, 443/tcp\n'));
-      expect(text, contains('\n\nwhois:\n  source: ip2whois\n'));
+      expect(text, contains('\n\nwhois:\n  source      : ip2whois\n'));
       expect(text, endsWith('\n\nerrors: -'));
       expect(text, isNot(contains(RegExp(r'[{}\[\]]'))));
       // null and empty values are left out, no trailing spaces
-      expect(text, isNot(contains('hostname:')));
+      expect(text, isNot(contains('hostname')));
       expect(text, isNot(contains(RegExp(r' $', multiLine: true))));
+    });
+
+    test('colons of sibling keys are aligned', () async {
+      final text = (await run('gist.github.com', keys: allDomainKeys)).toText();
+      // Siblings: key lines in the same block (blocks are separated by
+      // blank lines) below the same parent line.
+      final keyLine = RegExp(r'^( *)(- )?\S[^:]*:');
+      final columns = <String, Set<int>>{};
+      final parents = <(int, int)>[]; // (depth, line index)
+      var block = 0;
+      final lines = text.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (line.isEmpty) {
+          block++;
+          parents.clear();
+          continue;
+        }
+        final m = keyLine.firstMatch(line);
+        if (m == null) continue;
+        final depth = m.group(1)!.length + (m.group(2)?.length ?? 0);
+        while (parents.isNotEmpty && parents.last.$1 >= depth) {
+          parents.removeLast();
+        }
+        final group = '$block:${parents.isEmpty ? -1 : parents.last.$2}';
+        columns.putIfAbsent(group, () => <int>{}).add(line.indexOf(':'));
+        parents.add((depth, i));
+      }
+      expect(columns.length, greaterThan(20));
+      for (final e in columns.entries) {
+        expect(e.value, hasLength(1), reason: 'colons of group ${e.key}');
+      }
     });
 
     test('includeNulls and custom indent', () async {
       final result = await run('gist.github.com', keys: vt);
       final text = result.toText(includeNulls: true, indent: '\t');
-      expect(text, contains('\n\tid: gist.github.com\n'));
+      expect(text,
+          contains('\n\tid                         : gist.github.com\n'));
       // resolution items: level 2 + item continuation + field level
-      expect(text, contains('\n\t\t\t\thostname: -\n'));
-      expect(text, contains('\n\t\t\tgreynoise: -\n'));
-      expect(text, contains('\n\t\t- ip: 13.234.210.38\n'));
+      expect(text, contains('\n\t\t\t\thostname  : -\n'));
+      expect(text, contains('\n\t\t\tgreynoise          : -\n'));
+      expect(text, contains('\n\t\t- ip                 : 13.234.210.38\n'));
       expect(text, contains('\nurlhaus: -\n'));
     });
 
@@ -363,20 +396,30 @@ void main() {
               vtStatus: 502,
               vtErrorBody: '<html>\n<body>Bad Gateway</body>\n</html>'));
       final text = result.toText();
-      expect(text, contains('\nok: false\nvirustotal: -\n'));
       expect(
           text,
-          contains('\n\nerrors:\n'
-              '  - source: Virustotal\n'
-              '    type: http\n'
-              '    message: 502 Server Error'));
+          startsWith('entity     : gist.github.com\n'
+              'type       : domain\n'
+              'ok         : false\n'
+              'virustotal : -\n'
+              'urlhaus    : -\n'
+              'resolutions: -\n'
+              'whois      : -\n'
+              '\n'
+              'errors:\n'
+              '  - source     : Virustotal\n'
+              '    type       : http\n'
+              '    message    : 502 Server Error'));
       expect(
           text,
-          contains('    body:\n'
+          contains('    status_code: 502\n'
+              '    url        : https://www.virustotal.com/api/v3/domains/'
+              'gist.github.com\n'
+              '    body       :\n'
               '      <html>\n'
               '      <body>Bad Gateway</body>\n'
               '      </html>\n'));
-      expect(text, contains('\n\n  - source: Virustotal\n'));
+      expect(text, contains('\n\n  - source     : Virustotal\n'));
     });
 
     test('input error', () async {
@@ -384,12 +427,12 @@ void main() {
       expect(
           text,
           'entity: 10.0.0.1\n'
-          'type: ip\n'
-          'ok: false\n'
+          'type  : ip\n'
+          'ok    : false\n'
           '\n'
           'errors:\n'
-          '  - source: input\n'
-          '    type: input\n'
+          '  - source : input\n'
+          '    type   : input\n'
           '    message: Not a public IP address (private, loopback, '
           'link-local, multicast, documentation or reserved range) '
           '(got "10.0.0.1")');

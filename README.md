@@ -174,6 +174,8 @@ Zeitstempel werden – wie in der Anzeige des Originals – in `YYYY-MM-DDTHH:MM
 `result.toText()` liefert dieselben Daten wie das JSON als lesbaren Text:
 
 * eine Zeile `key: value` pro Feld, verschachtelte Werte mit `indent` eingerückt (Standard: zwei Leerzeichen),
+* die Doppelpunkte gleichrangiger Schlüssel eines Abschnitts stehen bündig untereinander
+  (der Schlüssel wird mit Leerzeichen aufgefüllt),
 * keine geschweiften oder eckigen Klammern,
 * Leerzeilen zwischen den Abschnitten (`virustotal`, `urlhaus`, `resolutions`, `whois`, `errors`) und
   zwischen den Einträgen von Listen (Resolutions, URLhaus-URLs, Fehler); Listeneinträge beginnen mit `- `,
@@ -184,48 +186,49 @@ Zeitstempel werden – wie in der Anzeige des Originals – in `YYYY-MM-DDTHH:MM
 
 ```
 entity: gist.github.com
-type: domain
-ok: true
+type  : domain
+ok    : true
 
 virustotal:
-  id: gist.github.com
-  type: domain
-  link: https://www.virustotal.com/gui/domain/gist.github.com
-  last_analysis_stats:
-    harmless: 84
-    malicious: 0
+  id                         : gist.github.com
+  type                       : domain
+  link                       : https://www.virustotal.com/gui/domain/gist.github.com
+  last_analysis_stats        :
+    harmless  : 84
+    malicious : 0
     suspicious: 0
-    timeout: 0
+    timeout   : 0
     undetected: 10
-  malicious_vendors: -
-  reputation: 0
-  popularity_ranks:
-    Majestic: 532
+  malicious_vendors          : -
+  reputation                 : 0
+  popularity_ranks           :
+    Majestic      : 532
     Cisco Umbrella: 39463
-  categories: advice, file sharing/storage, information technology, media sharing, social networks
+  categories                 : advice, file sharing/storage, information technology, media sharing, social networks
   …
+  last_https_certificate_date: 2022-08-15T22:25:30Z
 
 resolutions:
   total: 37
-  data:
-    - ip: 13.234.210.38
-      resolved: 2022-08-06T14:56:20Z
-      resolver: SecneurX
+  data :
+    - ip                 : 13.234.210.38
+      resolved           : 2022-08-06T14:56:20Z
+      resolver           : SecneurX
       …
-      shodan:
-        ip: 13.234.210.38
+      shodan             :
+        ip          : 13.234.210.38
         …
-        services:
+        services    :
           Other: 22/tcp, 80/tcp, 443/tcp
-        last_update: 2022-08-21T07:21:05Z
+        last_update : 2022-08-21T07:21:05Z
 
-    - ip: 192.30.255.113
+    - ip                 : 192.30.255.113
       …
 
 whois:
-  source: ip2whois
-  domain: github.com
-  registrar: MarkMonitor, Inc.
+  source      : ip2whois
+  domain      : github.com
+  registrar   : MarkMonitor, Inc.
   …
 
 errors: -
@@ -234,13 +237,21 @@ errors: -
 Bei Fehlern:
 
 ```
+entity     : example.com
+type       : domain
+ok         : false
+virustotal : -
+urlhaus    : -
+resolutions: -
+whois      : -
+
 errors:
-  - source: Virustotal
-    type: http
-    message: 502 Server Error (Bad Gateway)
+  - source     : Virustotal
+    type       : http
+    message    : 502 Server Error (Bad Gateway)
     status_code: 502
-    url: https://www.virustotal.com/api/v3/domains/example.com
-    body:
+    url        : https://www.virustotal.com/api/v3/domains/example.com
+    body       :
       <html>
       <head><title>502 Bad Gateway</title></head>
       …

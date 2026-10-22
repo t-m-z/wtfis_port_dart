@@ -141,6 +141,9 @@ class LookupResult {
   /// Readable text form of [toJson]: one `key: value` per line, nested
   /// values indented by [indent], no braces or brackets.
   ///
+  /// * The colons of keys on the same level of a section are aligned
+  ///   (keys are padded with spaces: `id      : ...`).
+  ///
   /// * Top-level sections (`virustotal`, `resolutions`, ...) and the items
   ///   of lists of objects (resolutions, URLhaus URLs, errors) are
   ///   separated by blank lines; list items start with `- `.
@@ -152,11 +155,29 @@ class LookupResult {
   ///   their key.
   String toText({String indent = '  ', bool includeNulls = false}) {
     final w = _TextWriter(indent, includeNulls);
-    for (final e in toJson().entries) {
-      final section = _TextWriter.isBlock(e.value);
-      if (section) w.blankLine();
-      w.entry(e.key, e.value, 0);
-      if (section) w.blankLine();
+    final entries = toJson().entries.toList();
+    var i = 0;
+    while (i < entries.length) {
+      final e = entries[i];
+      if (_TextWriter.isBlock(e.value)) {
+        // section of its own, separated by blank lines
+        w.blankLine();
+        w.entry(e.key, e.value, 0);
+        w.blankLine();
+        i++;
+        continue;
+      }
+      // run of simple top-level values (entity, type, ok, ...): aligned
+      var j = i;
+      while (j < entries.length && !_TextWriter.isBlock(entries[j].value)) {
+        j++;
+      }
+      final run = entries.sublist(i, j);
+      final width = _TextWriter.maxLength(run.map((e) => e.key));
+      for (final e in run) {
+        w.entry(e.key, e.value, 0, width);
+      }
+      i = j;
     }
     return w.toString();
   }
@@ -184,35 +205,45 @@ class _TextWriter {
     if (_lines.isNotEmpty && _lines.last.isNotEmpty) _lines.add('');
   }
 
+  static int maxLength(Iterable<String> keys) =>
+      keys.fold(0, (m, k) => k.length > m ? k.length : m);
+
+  /// Entries of an object; the colons of all written keys are aligned.
   void entries(Map<dynamic, dynamic> map, int level) {
-    for (final e in map.entries) {
-      if (_isMissing(e.value) && !includeNulls) continue;
-      entry('${e.key}', e.value, level);
+    final shown = [
+      for (final e in map.entries)
+        if (includeNulls || !_isMissing(e.value)) e,
+    ];
+    final width = maxLength(shown.map((e) => '${e.key}'));
+    for (final e in shown) {
+      entry('${e.key}', e.value, level, width);
     }
   }
 
-  void entry(String key, Object? value, int level) {
+  /// Writes one entry; [key] is padded to [width] so that colons align.
+  void entry(String key, Object? value, int level, [int width = 0]) {
     final pad = indent * level;
+    final label = '$pad${key.padRight(width)}:';
     if (value is Map<dynamic, dynamic> && value.isNotEmpty) {
-      _lines.add('$pad$key:');
+      _lines.add(label);
       entries(value, level + 1);
     } else if (isBlock(value)) {
-      _lines.add('$pad$key:');
+      _lines.add(label);
       _items(value as List<dynamic>, level + 1);
     } else if (value is List<dynamic>) {
       final text = value.isEmpty ? '-' : value.map(_scalar).join(', ');
-      _lines.add('$pad$key: $text');
+      _lines.add('$label $text');
     } else if (value is Map<dynamic, dynamic>) {
-      _lines.add('$pad$key: -');
+      _lines.add('$label -');
     } else {
       final text = _scalar(value);
       if (text.contains('\n')) {
-        _lines.add('$pad$key:');
+        _lines.add(label);
         for (final line in text.split(RegExp(r'\r?\n'))) {
           _lines.add('$pad$indent$line');
         }
       } else {
-        _lines.add('$pad$key: $text');
+        _lines.add('$label $text');
       }
     }
   }
