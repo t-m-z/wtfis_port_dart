@@ -141,8 +141,9 @@ class LookupResult {
   /// Readable text form of [toJson]: one `key: value` per line, nested
   /// values indented by [indent], no braces or brackets.
   ///
-  /// * The colons of keys on the same level of a section are aligned
-  ///   (keys are padded with spaces: `id      : ...`).
+  /// * All colons of the output are aligned in one column (keys are padded
+  ///   with spaces: `id      : ...`). A tab in [indent] counts as one
+  ///   character, so with tabs the alignment depends on the display.
   ///
   /// * Top-level sections (`virustotal`, `resolutions`, ...) and the items
   ///   of lists of objects (resolutions, URLhaus URLs, errors) are
@@ -155,29 +156,11 @@ class LookupResult {
   ///   their key.
   String toText({String indent = '  ', bool includeNulls = false}) {
     final w = _TextWriter(indent, includeNulls);
-    final entries = toJson().entries.toList();
-    var i = 0;
-    while (i < entries.length) {
-      final e = entries[i];
-      if (_TextWriter.isBlock(e.value)) {
-        // section of its own, separated by blank lines
-        w.blankLine();
-        w.entry(e.key, e.value, 0);
-        w.blankLine();
-        i++;
-        continue;
-      }
-      // run of simple top-level values (entity, type, ok, ...): aligned
-      var j = i;
-      while (j < entries.length && !_TextWriter.isBlock(entries[j].value)) {
-        j++;
-      }
-      final run = entries.sublist(i, j);
-      final width = _TextWriter.maxLength(run.map((e) => e.key));
-      for (final e in run) {
-        w.entry(e.key, e.value, 0, width);
-      }
-      i = j;
+    for (final e in toJson().entries) {
+      final section = _TextWriter.isBlock(e.value);
+      if (section) w.blankLine();
+      w.entry(e.key, e.value, 0);
+      if (section) w.blankLine();
     }
     return w.toString();
   }
@@ -186,12 +169,27 @@ class LookupResult {
   String toString() => toJsonString();
 }
 
+/// One output line: [head] is the indented key (without colon) and [tail]
+/// the text after the colon; lines without key have a `null` tail and are
+/// written as they are ([head] only).
+class _Line {
+  final String head;
+  final String? tail;
+
+  const _Line(this.head, [this.tail]);
+
+  bool get isBlank => head.isEmpty && tail == null;
+
+  _Line prefixed(String prefix) => isBlank ? this : _Line('$prefix$head', tail);
+}
+
 /// Writes JSON-like data as indented `key: value` lines (see
-/// [LookupResult.toText]).
+/// [LookupResult.toText]). All colons of the output are aligned in one
+/// column, which is computed when the text is assembled.
 class _TextWriter {
   final String indent;
   final bool includeNulls;
-  final List<String> _lines = [];
+  final List<_Line> _lines = [];
 
   _TextWriter(this.indent, this.includeNulls);
 
@@ -202,48 +200,39 @@ class _TextWriter {
 
   /// Adds a blank line unless there is one already (or nothing yet).
   void blankLine() {
-    if (_lines.isNotEmpty && _lines.last.isNotEmpty) _lines.add('');
+    if (_lines.isNotEmpty && !_lines.last.isBlank) _lines.add(const _Line(''));
   }
 
-  static int maxLength(Iterable<String> keys) =>
-      keys.fold(0, (m, k) => k.length > m ? k.length : m);
-
-  /// Entries of an object; the colons of all written keys are aligned.
   void entries(Map<dynamic, dynamic> map, int level) {
-    final shown = [
-      for (final e in map.entries)
-        if (includeNulls || !_isMissing(e.value)) e,
-    ];
-    final width = maxLength(shown.map((e) => '${e.key}'));
-    for (final e in shown) {
-      entry('${e.key}', e.value, level, width);
+    for (final e in map.entries) {
+      if (_isMissing(e.value) && !includeNulls) continue;
+      entry('${e.key}', e.value, level);
     }
   }
 
-  /// Writes one entry; [key] is padded to [width] so that colons align.
-  void entry(String key, Object? value, int level, [int width = 0]) {
+  void entry(String key, Object? value, int level) {
     final pad = indent * level;
-    final label = '$pad${key.padRight(width)}:';
+    final head = '$pad$key';
     if (value is Map<dynamic, dynamic> && value.isNotEmpty) {
-      _lines.add(label);
+      _lines.add(_Line(head, ''));
       entries(value, level + 1);
     } else if (isBlock(value)) {
-      _lines.add(label);
+      _lines.add(_Line(head, ''));
       _items(value as List<dynamic>, level + 1);
     } else if (value is List<dynamic>) {
       final text = value.isEmpty ? '-' : value.map(_scalar).join(', ');
-      _lines.add('$label $text');
+      _lines.add(_Line(head, ' $text'));
     } else if (value is Map<dynamic, dynamic>) {
-      _lines.add('$label -');
+      _lines.add(_Line(head, ' -'));
     } else {
       final text = _scalar(value);
       if (text.contains('\n')) {
-        _lines.add(label);
+        _lines.add(_Line(head, ''));
         for (final line in text.split(RegExp(r'\r?\n'))) {
-          _lines.add('$pad$indent$line');
+          _lines.add(_Line('$pad$indent$line'));
         }
       } else {
-        _lines.add('$label $text');
+        _lines.add(_Line(head, ' $text'));
       }
     }
   }
@@ -258,17 +247,16 @@ class _TextWriter {
         ? '-'.padRight(indent.length)
         : '- ';
     for (var i = 0; i < items.length; i++) {
-      if (i > 0) _lines.add('');
+      if (i > 0) _lines.add(const _Line(''));
       final Object? item = items[i];
       final sub = _TextWriter(indent, includeNulls);
       if (item is Map<dynamic, dynamic>) {
         sub.entries(item, 0);
       } else {
-        sub._lines.add(_scalar(item));
+        sub._lines.add(_Line(_scalar(item)));
       }
       for (var j = 0; j < sub._lines.length; j++) {
-        final line = sub._lines[j];
-        _lines.add(line.isEmpty ? '' : '$pad${j == 0 ? marker : indent}$line');
+        _lines.add(sub._lines[j].prefixed('$pad${j == 0 ? marker : indent}'));
       }
     }
   }
@@ -279,9 +267,16 @@ class _TextWriter {
 
   @override
   String toString() {
-    while (_lines.isNotEmpty && _lines.last.isEmpty) {
+    while (_lines.isNotEmpty && _lines.last.isBlank) {
       _lines.removeLast();
     }
-    return _lines.join('\n');
+    // one common colon column for the whole output
+    final column = _lines
+        .where((l) => l.tail != null)
+        .fold(0, (m, l) => l.head.length > m ? l.head.length : m);
+    return [
+      for (final l in _lines)
+        l.tail == null ? l.head : '${l.head.padRight(column)}:${l.tail}',
+    ].join('\n');
   }
 }
